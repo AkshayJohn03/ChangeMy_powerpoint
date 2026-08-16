@@ -1,0 +1,20 @@
+# Node / React
+node_modules/
+ui/node_modules/
+dist/
+ui/dist/
+ui/src-tauri/target/
+
+# Python
+backend/venv/
+backend/build/
+backend/dist/
+backend/*.exe
+backend/*.pptx
+backend/Akkodis_Guidelines.pptx
+
+# Logs & Temporary Files
+*.log
+*.tmp
+.DS_Store
+rustup-init.exe
