@@ -1,0 +1,17 @@
+{
+ "model_name": "morphlite_intent_v1",
+ "winner": "random_forest",
+ "feature_schema_version": "deck_v1",
+ "classes": [
+  "MIXED",
+  "PRESERVE",
+  "REBUILD"
+ ],
+ "training_samples": 37,
+ "total_samples": 48,
+ "real_samples": 48,
+ "synthetic_samples": 0,
+ "test_macro_f1": 0.7948717948717949,
+ "test_accuracy": 0.875,
+ "created_at": "2026-08-21T21:24:16.418936+00:00"
+}

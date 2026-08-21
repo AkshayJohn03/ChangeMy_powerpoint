@@ -1,36 +1,6 @@
-# Node / React
-node_modules/
-ui/node_modules/
-dist/
-ui/dist/
-ui/src-tauri/target/
-
-# Python
-backend/venv/
-backend/build/
-backend/dist/
-backend/*.exe
-backend/__pycache__/
-morphlite/__pycache__/
-morphlite/*/__pycache__/
-*.pyc
-
-# PowerPoint Decks & Extracted Datasets (CRITICAL: Company Data Protection)
-*.pptx
-*.ppt
+# --- MorphLite data compliance: never commit deck-bearing artifacts ---
 data/
-data/*
-data/source/
-data/extracted/
-data/metadata/
-data/pairs/
-data/processed/
-*.jsonl
-session*.md
-.hash_cache.json
-
-# Logs & Temporary Files
-*.log
-*.tmp
-.DS_Store
-rustup-init.exe
+session-ses_*.md
+*.joblib
+__pycache__/
+*.pyc

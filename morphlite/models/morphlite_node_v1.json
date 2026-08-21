@@ -1,0 +1,21 @@
+{
+ "model_name": "morphlite_node_v1",
+ "winner": "random_forest",
+ "feature_schema_version": "1.1.0",
+ "classes": [
+  "ADD",
+  "MOVE",
+  "RECOLOR",
+  "REMOVE",
+  "RESIZE",
+  "RESTYLE",
+  "UNCHANGED"
+ ],
+ "training_samples": 6356,
+ "total_samples": 9274,
+ "real_samples": 9274,
+ "synthetic_samples": 0,
+ "test_macro_f1": 0.45391451254755494,
+ "test_accuracy": 0.9058,
+ "created_at": "2026-08-21T21:24:41.876560+00:00"
+}

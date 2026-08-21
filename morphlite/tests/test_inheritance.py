@@ -12,7 +12,16 @@ import pptx
 from ..ast.effective import DeckTypographyResolver
 
 BRANDMORPH_ROOT = Path(__file__).resolve().parents[2]
-CORPUS_DECK = BRANDMORPH_ROOT / "data" / "source" / "paired" / "raw" / "12Dec" / "Akkodis engagement models and MS conversion approach v1 raw.pptx"
+
+
+def _any_corpus_deck() -> Path | None:
+    for pattern in ("data/source/paired/raw/**/*.pptx", "data/source/branded_only/**/*.pptx"):
+        hits = sorted((BRANDMORPH_ROOT / pattern).parent.glob(pattern.split("/")[-1])) if False else sorted(
+            p for p in (BRANDMORPH_ROOT / pattern.split("/**/")[0]).rglob(pattern.split("/**/")[1])
+        )
+        if hits:
+            return hits[0]
+    return None
 
 
 def build_synthetic(tmp_path: Path) -> Path:
@@ -76,8 +85,9 @@ def test_synthetic():
 
 
 def test_corpus_smoke():
-    assert CORPUS_DECK.exists(), f"corpus deck missing: {CORPUS_DECK}"
-    with DeckTypographyResolver(str(CORPUS_DECK)) as r:
+    corpus = _any_corpus_deck()
+    assert corpus is not None, "no anonymized corpus decks found under data/source"
+    with DeckTypographyResolver(str(corpus)) as r:
         origin_counter = {}
         total_shapes = 0
         size_resolved = family_resolved = 0
