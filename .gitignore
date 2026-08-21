@@ -10,8 +10,24 @@ backend/venv/
 backend/build/
 backend/dist/
 backend/*.exe
-backend/*.pptx
-backend/Akkodis_Guidelines.pptx
+backend/__pycache__/
+morphlite/__pycache__/
+morphlite/*/__pycache__/
+*.pyc
+
+# PowerPoint Decks & Extracted Datasets (CRITICAL: Company Data Protection)
+*.pptx
+*.ppt
+data/
+data/*
+data/source/
+data/extracted/
+data/metadata/
+data/pairs/
+data/processed/
+*.jsonl
+session*.md
+.hash_cache.json
 
 # Logs & Temporary Files
 *.log
