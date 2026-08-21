@@ -266,8 +266,8 @@ def main() -> None:
             for r in rows:
                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
-    dump("intent_dataset.jsonl", intent_rows)
-    dump("node_dataset.jsonl", node_rows)
+    dump("intent_dataset_v1.jsonl", intent_rows)
+    dump("node_dataset_v1.jsonl", node_rows)
 
     def summarize(rows):
         c = defaultdict(lambda: defaultdict(int))
@@ -290,7 +290,7 @@ def main() -> None:
             "features": node_features.FEATURE_NAMES,
         },
     }
-    (PROCESSED / "dataset_meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    (PROCESSED / "dataset_meta_v1.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     print(json.dumps(meta["intent"]["splits"], indent=1))
     print(json.dumps(meta["node"]["splits"], indent=1))
 

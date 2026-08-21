@@ -1,0 +1,22 @@
+{
+ "model_name": "morphlite_intent_v2",
+ "winner": "dummy_most_frequent",
+ "promoted": false,
+ "not_promoted_reasons": [
+  "does_not_beat_dummy",
+  "minority_recall_below_threshold"
+ ],
+ "selection_metric": "grouped_cv_macro_f1_mean",
+ "cv_macro_f1": 0.575,
+ "feature_schema_version": "2.0.0",
+ "classes": [
+  "MIXED",
+  "PRESERVE",
+  "REBUILD"
+ ],
+ "training_samples": 44,
+ "total_samples": 74,
+ "synthetic_samples": 0,
+ "test_macro_f1": 0.0,
+ "created_at": "2026-08-21T22:48:22.860490+00:00"
+}
