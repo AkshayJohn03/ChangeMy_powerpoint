@@ -1,0 +1,42 @@
+{
+ "decks": 261,
+ "elapsed_sec": 43.1,
+ "field_resolution": {
+  "font_size_pt": 1.2531,
+  "bold": 0.8586,
+  "italic": 0.666,
+  "color": 0.9641,
+  "font_family": 1.2582
+ },
+ "unresolved_counts": {
+  "no_shape_match": 209
+ },
+ "origin_histogram": {
+  "font_size_pt:run": 21340,
+  "bold:run": 15678,
+  "italic:run": 12050,
+  "color:run": 16942,
+  "font_family:run": 19937,
+  "font_size_pt:shape_list_style": 1101,
+  "bold:shape_list_style": 650,
+  "color:shape_list_style": 1666,
+  "font_family:shape_list_style": 308,
+  "font_size_pt:layout_placeholder": 636,
+  "font_family:theme": 4004,
+  "font_size_pt:master_other_style": 1116,
+  "bold:master_body_style": 23,
+  "font_family:master_body_style": 15,
+  "bold:master_title_style": 182,
+  "font_size_pt:master_title_style": 87,
+  "font_family:master_title_style": 27,
+  "font_size_pt:master_body_style": 16,
+  "font_family:layout_placeholder": 86,
+  "italic:shape_list_style": 766,
+  "color:paragraph_default": 113,
+  "font_size_pt:paragraph_default": 101,
+  "font_family:paragraph_default": 118,
+  "bold:layout_placeholder": 183,
+  "italic:layout_placeholder": 151,
+  "color:layout_placeholder": 49
+ }
+}
