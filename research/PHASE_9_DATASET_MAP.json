@@ -1,0 +1,158 @@
+{
+  "counts": {
+    "total_rows": 7350,
+    "distinct_slides": 301,
+    "distinct_family_groups": 39,
+    "rows_per_slide": {
+      "min": 1,
+      "median": 19,
+      "p90": 46,
+      "max": 137,
+      "mean": 24.419
+    },
+    "slides_per_family": {
+      "min": 1,
+      "median": 2,
+      "p90": 24.2,
+      "max": 53,
+      "mean": 7.718
+    },
+    "slides_per_family_hist": {
+      "1": 19,
+      "11+": 10,
+      "2": 5,
+      "3-5": 2,
+      "6-10": 3
+    }
+  },
+  "labels": {
+    "split_field_present_in_cache": false,
+    "note": "cache rows carry no 'split'; Phase 9 must re-derive folds",
+    "class_counts_total": {
+      "MOVE": 441,
+      "RECOLOR": 22,
+      "REMOVE": 675,
+      "RESIZE": 922,
+      "RESTYLE": 39,
+      "UNCHANGED": 5251
+    }
+  },
+  "move_map": {
+    "move_rows": 441,
+    "move_share_pct": 6.0,
+    "slides_with_0_move": 225,
+    "slides_with_1_move": 24,
+    "slides_with_2plus_move": 52,
+    "moves_per_slide_dist": {
+      "min": 1,
+      "median": 3.0,
+      "p90": 17.5,
+      "max": 28,
+      "mean": 5.803
+    },
+    "move_depth_buckets": {
+      "0": 432,
+      "1": 8,
+      "2-3": 1
+    },
+    "move_text_nodes": 227,
+    "move_nontext_nodes": 214,
+    "displacement_note": "NOT derivable from propagation_cache.jsonl: cache stores normalized base geometry only, no before/after deltas. External citation: data/metadata/MOVE_FORENSICS.json (schema move_forensics_v1): true_move_nodes=441, detected=48, missed=393; disp detected_median=0.05181 vs missed_median=0.03678."
+  },
+  "family_boundaries": {
+    "n_families": 39,
+    "families_with_variant_twin_slides": 0,
+    "variant_twin_examples_max3": [],
+    "duplicate_sample_ids": 0,
+    "largest_family_slides": 53,
+    "smallest_family_slides": 1,
+    "integrity_groups_spanning_splits_claim": 0,
+    "crosscheck_note": "cache has no split column; group-spanning-splits cannot be re-verified here, only slide-level twin check performed"
+  },
+  "template_clusters": {
+    "n_clusters_exact_hash_all": 148,
+    "n_shared_clusters_2plus_decks": 41,
+    "decks_in_shared_clusters": 154,
+    "singleton_clusters": 107,
+    "n_indexed_decks": 261,
+    "decks_unmapped_to_family": 133,
+    "shared_clusters_spanning_multiple_family_groups": 8,
+    "spanning_detail_top10": [
+      {
+        "hash": "36f700b4befe",
+        "n_decks": 3,
+        "n_families": 3
+      },
+      {
+        "hash": "48a48dcd1050",
+        "n_decks": 3,
+        "n_families": 3
+      },
+      {
+        "hash": "1b99ec38ff9e",
+        "n_decks": 3,
+        "n_families": 3
+      },
+      {
+        "hash": "61ea46f41a0d",
+        "n_decks": 3,
+        "n_families": 3
+      },
+      {
+        "hash": "3ec58ac0b2de",
+        "n_decks": 2,
+        "n_families": 2
+      },
+      {
+        "hash": "dfe7212e3eed",
+        "n_decks": 2,
+        "n_families": 2
+      },
+      {
+        "hash": "5a3f0bd5b925",
+        "n_decks": 2,
+        "n_families": 2
+      },
+      {
+        "hash": "f55503d94474",
+        "n_decks": 2,
+        "n_families": 2
+      }
+    ],
+    "max_families_in_one_cluster": 3,
+    "integrity_template_family_clusters_claim": 41,
+    "integrity_decks_in_shared_template_families_claim": 154
+  },
+  "pair_coverage": {
+    "n_validated_pairs": 43,
+    "pairs_contributing_at_least_1_cache_row": 43,
+    "orphan_pairs_no_cache_row": 0,
+    "orphan_pair_ids_max5": [],
+    "slide_mappings_total": 301,
+    "distinct_raw_slides_mapped": 301,
+    "distinct_branded_slides_mapped": 301,
+    "cache_slides_matched_by_any_mapping": 301,
+    "cache_slides_unmatched_by_mappings": 0,
+    "slides_evaluated_sum_matched": 301
+  },
+  "integrity_crosscheck": {
+    "compared_against": "data/metadata/DATASET_INTEGRITY.json v1+v2",
+    "mismatches": [],
+    "explainable_deltas": [
+      "node.n_samples: integrity=7888 cache=7350 (delta=538) \u2014 EXPLAINABLE: cache is the raw-side node substrate; ADD-class rows exist only on the branded side and are absent by construction.",
+      "label ADD=538 present in integrity but absent in cache \u2014 EXPLAINABLE (branded-side-only rows; all other classes match exactly)."
+    ],
+    "match": true
+  },
+  "recommendations": {
+    "min_class": "RECOLOR",
+    "min_class_support": 22,
+    "n_groups_containing_min_class": 5,
+    "n_slides_containing_min_class": 10,
+    "max_safe_stratified_group_kfold_k": 5,
+    "recommended_k": 5,
+    "rationale": "StratifiedGroupKFold needs every fold testable for the rarest class (RECOLOR, support=22); it appears in 5 family groups, so k must be <= 5. Family sizes range 1-53 slides, so grouped folds are well-formed up to that bound.",
+    "dedup_needed": true,
+    "dedup_note": "No dedup-by-slide needed: 0 variant-twin slide keys, 0 duplicate sample ids. Dedup-by-template-hash pre-pass RECOMMENDED: 41 exact-hash clusters (>=2 decks) cover 154 of 261 indexed decks (107 singleton clusters) and 8 shared clusters span multiple family groups -> near-duplicate leakage risk across grouped folds."
+  }
+}
