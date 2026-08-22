@@ -34,10 +34,6 @@ def build_hybrid_plan(deck_ast: dict, chrome: dict, rules: dict, models: dict | 
         rule_conf = _rule_confidence(entry)
         ml_conf = None
         ml_pred = None
-        if node_model is not None:
-            pred = node_model["model"].predict(np.zeros((1, 1), dtype=float))
-            ml_pred = str(pred[0])
-            ml_conf = 0.0
         target_class = _NODE_OPS_TO_CLASS.get(entry["op"])
         agree = bool(ml_pred and target_class and ml_pred == target_class)
         source, used, fused = conf.fuse(rule_conf if rule_conf else None, ml_conf, agree)
