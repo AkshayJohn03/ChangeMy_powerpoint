@@ -1,0 +1,100 @@
+{
+ "schema": "move_forensics_v1",
+ "true_move_nodes": 441,
+ "detected": 48,
+ "missed": 393,
+ "feature_comparison_detected_vs_missed": {
+  "disp": {
+   "detected_median": 0.05181,
+   "missed_median": 0.03678,
+   "detected_mean": 0.04868,
+   "missed_mean": 0.05077,
+   "auc_detected_vs_missed": 0.4871
+  },
+  "dx": {
+   "detected_median": 0.0,
+   "missed_median": 0.01007,
+   "detected_mean": 0.017,
+   "missed_mean": 0.02386,
+   "auc_detected_vs_missed": 0.4529
+  },
+  "dy": {
+   "detected_median": 0.05181,
+   "missed_median": 0.03066,
+   "detected_mean": 0.04335,
+   "missed_mean": 0.03376,
+   "auc_detected_vs_missed": 0.6288
+  },
+  "overlap_before_after": {
+   "detected_median": 0.48715,
+   "missed_median": 0.4356,
+   "detected_mean": 0.33766,
+   "missed_mean": 0.40975,
+   "auc_detected_vs_missed": 0.4383
+  },
+  "match_confidence": {
+   "detected_median": 0.9775,
+   "missed_median": 0.9801,
+   "detected_mean": 0.9773,
+   "missed_mean": 0.97148,
+   "auc_detected_vs_missed": 0.5875
+  },
+  "group_size": {
+   "detected_median": 1.0,
+   "missed_median": 1.0,
+   "detected_mean": 1.0,
+   "missed_mean": 1.41476,
+   "auc_detected_vs_missed": 0.4885
+  },
+  "group_move_frac": {
+   "detected_median": 0.0,
+   "missed_median": 0.0,
+   "detected_mean": 0.0,
+   "missed_mean": 0.00102,
+   "auc_detected_vs_missed": 0.4975
+  },
+  "depth": {
+   "detected_median": 0.0,
+   "missed_median": 0.0,
+   "detected_mean": 0.0,
+   "missed_mean": 0.02545,
+   "auc_detected_vs_missed": 0.4885
+  },
+  "text_len_log": {
+   "detected_median": 2.8029,
+   "missed_median": 0.0,
+   "detected_mean": 2.32837,
+   "missed_mean": 1.78711,
+   "auc_detected_vs_missed": 0.5738
+  }
+ },
+ "missed_taxonomy": {
+  "vertical_only_move": 177,
+  "other": 138,
+  "horizontal_only_move": 67,
+  "large_displacement": 11
+ },
+ "taxonomy_share_of_misses": {
+  "vertical_only_move": 0.4504,
+  "other": 0.3511,
+  "horizontal_only_move": 0.1705,
+  "large_displacement": 0.028
+ },
+ "detected_taxonomy_for_reference": {
+  "vertical_only_move": 25,
+  "other": 22,
+  "large_displacement": 1
+ },
+ "dominant_bucket": {
+  "name": "vertical_only_move",
+  "share": 0.4504
+ },
+ "other_bucket_profile": {
+  "share_non_text": 0.6014,
+  "share_grouped": 0.0145,
+  "median_disp": 0.05246,
+  "median_depth": 0.0
+ },
+ "recommended_action": "Axis-specific signal -> add directional displacement features",
+ "note": "Forensic-only analysis using golden-pair ground-truth deltas; features are NOT deployable."
+}
