@@ -1,0 +1,125 @@
+{
+ "schema": "context_ablation_v1",
+ "n_rows": 7350,
+ "n_groups": 39,
+ "n_splits": 5,
+ "feature_space_dims": {
+  "A_node_only": 49,
+  "B_node_slide": 74,
+  "C_node_local": 57,
+  "D_full": 82
+ },
+ "ablation": {
+  "A_node_only": {
+   "random_forest": {
+    "macro_f1": 0.3787,
+    "weak_macro_f1": 0.3484,
+    "move_precision": 0.1333,
+    "move_recall": 0.0045,
+    "move_f1": 0.0088,
+    "unchanged_recall": 0.9621,
+    "unsafe_rate": 0.0116
+   },
+   "hist_gbdt": {
+    "macro_f1": 0.3772,
+    "weak_macro_f1": 0.3488,
+    "move_precision": 0.2143,
+    "move_recall": 0.0476,
+    "move_f1": 0.0779,
+    "unchanged_recall": 0.9135,
+    "unsafe_rate": 0.029
+   }
+  },
+  "B_node_slide": {
+   "random_forest": {
+    "macro_f1": 0.3747,
+    "weak_macro_f1": 0.3424,
+    "move_precision": 0.0,
+    "move_recall": 0.0,
+    "move_f1": 0.0,
+    "unchanged_recall": 0.9623,
+    "unsafe_rate": 0.0087
+   },
+   "hist_gbdt": {
+    "macro_f1": 0.3077,
+    "weak_macro_f1": 0.2513,
+    "move_precision": 0.1039,
+    "move_recall": 0.0363,
+    "move_f1": 0.0538,
+    "unchanged_recall": 0.8619,
+    "unsafe_rate": 0.0516
+   }
+  },
+  "C_node_local": {
+   "random_forest": {
+    "macro_f1": 0.3872,
+    "weak_macro_f1": 0.3606,
+    "move_precision": 0.6667,
+    "move_recall": 0.0272,
+    "move_f1": 0.0523,
+    "unchanged_recall": 0.9663,
+    "unsafe_rate": 0.009
+   },
+   "hist_gbdt": {
+    "macro_f1": 0.3548,
+    "weak_macro_f1": 0.3169,
+    "move_precision": 0.2836,
+    "move_recall": 0.0862,
+    "move_f1": 0.1322,
+    "unchanged_recall": 0.8981,
+    "unsafe_rate": 0.032
+   }
+  },
+  "D_full": {
+   "random_forest": {
+    "macro_f1": 0.3772,
+    "weak_macro_f1": 0.3454,
+    "move_precision": 0.0,
+    "move_recall": 0.0,
+    "move_f1": 0.0,
+    "unchanged_recall": 0.9669,
+    "unsafe_rate": 0.0073
+   },
+   "hist_gbdt": {
+    "macro_f1": 0.3563,
+    "weak_macro_f1": 0.3156,
+    "move_precision": 0.25,
+    "move_recall": 0.0272,
+    "move_f1": 0.0491,
+    "unchanged_recall": 0.897,
+    "unsafe_rate": 0.0208
+   }
+  }
+ },
+ "conditional_ambiguity": {
+  "A_node_only": {
+   "knn_accuracy_all_nodes": 0.7752,
+   "move_knn_entropy_mean": 0.9818,
+   "move_knn_movefrac_mean": 0.166
+  },
+  "B_node_slide": {
+   "knn_accuracy_all_nodes": 0.797,
+   "move_knn_entropy_mean": 0.8811,
+   "move_knn_movefrac_mean": 0.2029
+  },
+  "C_node_local": {
+   "knn_accuracy_all_nodes": 0.7886,
+   "move_knn_entropy_mean": 0.9916,
+   "move_knn_movefrac_mean": 0.198
+  },
+  "D_full": {
+   "knn_accuracy_all_nodes": 0.7992,
+   "move_knn_entropy_mean": 0.8909,
+   "move_knn_movefrac_mean": 0.2111
+  }
+ },
+ "deltas_rf_vs_A": {
+  "weak_macro_f1": -0.003,
+  "move_recall": -0.0045,
+  "entropy_drop_bits": 0.0909
+ },
+ "verdict": {
+  "classification": "OUTCOME_1_GENUINE_AMBIGUITY",
+  "action": "NO-GO reinforced: neither slide context nor local aggregation reduces ambiguity or improves MOVE. Targeted label collection (Pool A/B) is the next investment."
+ }
+}
