@@ -1,0 +1,53 @@
+{
+ "schema": "seed_recovery_v1",
+ "n_rows": 7350,
+ "n_groups": 39,
+ "n_splits": 5,
+ "labels_present": [
+  "MOVE",
+  "RECOLOR",
+  "REMOVE",
+  "RESIZE",
+  "RESTYLE",
+  "UNCHANGED"
+ ],
+ "geometry_features_note": "raw-only deployable geometry signals (no before/after correspondence)",
+ "seeds": {
+  "A_base_rf": {
+   "move_precision": 0.3125,
+   "move_recall": 0.0113,
+   "move_f1": 0.0218,
+   "weak_recall_nonunchanged": 0.441,
+   "unchanged_recall": 0.9619,
+   "unsafe_destructive_rate": 0.011,
+   "macro_f1": 0.3819
+  },
+  "B_weighted_rf": {
+   "move_precision": 0.25,
+   "move_recall": 0.0952,
+   "move_f1": 0.1379,
+   "weak_recall_nonunchanged": 0.4059,
+   "unchanged_recall": 0.9524,
+   "unsafe_destructive_rate": 0.0193,
+   "macro_f1": 0.3482
+  },
+  "C_binary_detectors": {
+   "move_precision": 0.5217,
+   "move_recall": 0.0544,
+   "move_f1": 0.0985,
+   "weak_recall_nonunchanged": 0.481,
+   "unchanged_recall": 0.949,
+   "unsafe_destructive_rate": 0.018,
+   "macro_f1": 0.3916
+  },
+  "D_hybrid_ensemble": {
+   "move_precision": 0.2857,
+   "move_recall": 0.1088,
+   "move_f1": 0.1576,
+   "weak_recall_nonunchanged": 0.4502,
+   "unchanged_recall": 0.9505,
+   "unsafe_destructive_rate": 0.021,
+   "macro_f1": 0.3936
+  }
+ }
+}

@@ -70,3 +70,48 @@ NO-GO: iterative propagation of OOF predicted probabilities does not recover ora
 - determinism_check: True
 - v2 node dataset: n_samples=7888 unique_groups=39 duplicate_sample_ids=0 groups_spanning_splits=0
 - gate no_leakage: PASS
+
+---
+
+## Phase 7.5 addendum — Seed Recovery Experiment
+
+### What Phase 7 disproved
+Naive propagation of the base model's OOF probability vectors produces no deployable improvement.
+
+### What Phase 7 did NOT disprove
+Graph learning, message passing, one-hop aggregation, or relational information itself.
+Phase 6 proved true neighbour labels are highly predictive (oracle MOVE F1 0.745).
+
+### Seed strategies tested (OOF, deck-family grouped)
+
+| Seed | MOVE P | MOVE R | MOVE F1 | weak recall | UNCH recall | unsafe | macro F1 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| A base RF | 0.313 | 0.011 | 0.022 | 0.441 | 0.962 | 0.011 | 0.382 |
+| B weighted RF | 0.250 | 0.095 | 0.138 | 0.406 | 0.952 | 0.019 | 0.348 |
+| C binary detectors | **0.522** | 0.054 | 0.099 | 0.481 | 0.949 | 0.018 | 0.392 |
+| D hybrid ensemble | 0.286 | **0.109** | **0.158** | 0.450 | 0.951 | 0.021 | **0.394** |
+
+Geometry detector used raw-only deployable signals (no before/after correspondence).
+Ensemble weights tuned on inner grouped folds only.
+
+### Narrowed propagation re-run (Phase 7.6)
+
+Best config: D_hybrid / GROUP edges / round 1 / any alpha / argmax ->
+weak macro **0.3716**, macro **0.3936**, MOVE recall **0.109**, MOVE F1 **0.158**,
+UNCHANGED drop 0.011, deterministic across alphas/rounds (propagation is a pass-through
+of the improved seed distribution).
+
+### Verdict
+
+- Seed recovery: **PARTIAL SUCCESS** - 24x base MOVE recall at usable precision, best macro so far.
+- Propagation amplification: **NO-GO again** - the graph adds ~nothing on top of good seeds;
+  predicted-probability neighbourhoods carry no exploitable structure beyond per-node knowledge.
+- Promotion gates: FAILED (weak delta +0.015 < +0.10; MOVE recall 0.109 < 0.25; MOVE F1 0.158 < 0.20).
+
+### Consequence
+
+The oracle gap decomposes into: (a) seed quality - partially recovered; (b) information that
+exists ONLY in true neighbour state - unreachable without end-to-end learned message passing.
+With two consecutive strict NO-GOs, the relational track is frozen: invest in more validated
+pairs + manual review loop to raise base predictor quality. Revisit a small GNN only if base
+weak-class recall improves materially (target: MOVE recall >= 0.30 from the node model alone).
