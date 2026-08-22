@@ -1,0 +1,65 @@
+{
+ "schema": "move_utility_v1",
+ "utility": {
+  "true_move_nodes": 441,
+  "event_recall_overall": 0.1088,
+  "weighted_displacement_recall": 0.1048,
+  "micro_small": {
+   "events": 112,
+   "event_share": 0.254,
+   "mass_share": 0.1224
+  },
+  "buckets": {
+   "MICRO": {
+    "n_true_move": 0,
+    "detected": 0,
+    "recall_event": 0.0,
+    "displacement_mass_share": 0.0
+   },
+   "SMALL": {
+    "n_true_move": 112,
+    "detected": 20,
+    "recall_event": 0.1786,
+    "displacement_mass_share": 0.1224
+   },
+   "MEDIUM": {
+    "n_true_move": 290,
+    "detected": 25,
+    "recall_event": 0.0862,
+    "displacement_mass_share": 0.6204
+   },
+   "LARGE": {
+    "n_true_move": 39,
+    "detected": 3,
+    "recall_event": 0.0769,
+    "displacement_mass_share": 0.2572
+   }
+  }
+ },
+ "ambiguity": {
+  "knn_k": 10,
+  "global_label_entropy_H_Y": 1.3474,
+  "mean_neighbour_entropy_for_MOVE_nodes": 0.9941,
+  "mean_nbr_move_fraction_for_MOVE_nodes": 0.1753,
+  "bucket_MICRO": {
+   "n": 0,
+   "mean_neighbour_entropy": null,
+   "mean_nbr_move_fraction": null
+  },
+  "bucket_SMALL": {
+   "n": 112,
+   "mean_neighbour_entropy": 0.9612,
+   "mean_nbr_move_fraction": 0.1393
+  },
+  "bucket_MEDIUM": {
+   "n": 290,
+   "mean_neighbour_entropy": 1.0184,
+   "mean_nbr_move_fraction": 0.1986
+  },
+  "bucket_LARGE": {
+   "n": 39,
+   "mean_neighbour_entropy": 0.9073,
+   "mean_nbr_move_fraction": 0.1051
+  }
+ }
+}
