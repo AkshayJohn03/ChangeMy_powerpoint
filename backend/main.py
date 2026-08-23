@@ -10,7 +10,10 @@ from builder import NativePPTXBuilder, BrandTokens
 from pptx.dml.color import RGBColor
 from typing import Dict, Any, List
 
+from routes_v01 import router as v01_router
+
 app = FastAPI()
+app.include_router(v01_router)
 
 app.add_middleware(
     CORSMiddleware,
