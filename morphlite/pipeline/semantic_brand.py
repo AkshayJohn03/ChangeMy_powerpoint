@@ -311,46 +311,81 @@ class SemanticBrandTransformer:
                             title_font: str, body_font: str):
         shape_id = getattr(shape, "shape_id", 0)
         shape_name = shape.name or ""
+        bp = self.profile
+        aqua = RGBColor(0, 255, 255)
 
-        # Card/shape styling
-        if role in ("CARD", "UNKNOWN") and not shape.has_text_frame:
+        # Skip non-styled types
+        try:
+            st = str(shape.shape_type)
+            if "TABLE" in st or "CHART" in st or "PLACEHOLDER" in st.upper():
+                return
+        except Exception:
+            pass
+
+        has_text = shape.has_text_frame and shape.text_frame.text.strip()
+        is_title = role in ("TITLE", "SUBTITLE", "SECTION_HEADER")
+
+        # --- STEP 1: SHAPE FILL + BORDER ---
+        # Apply card styling to any shape that visually acts as a container.
+        # This includes text-bearing shapes so text/fill are styled as a unit.
+        is_visual_container = False
+        try:
+            st = str(shape.shape_type)
+            is_visual_container = (
+                "AUTO_SHAPE" in st or "FREEFORM" in st or "RECTANGLE" in st
+            )
+        except Exception:
+            pass
+
+        # Titles typically sit directly on the background (no fill needed)
+        # Cards/body containers get the brand card treatment
+        should_style_fill = is_visual_container and not is_title
+
+        if should_style_fill:
             try:
-                st = str(shape.shape_type)
-                if "AUTO_SHAPE" in st or "FREEFORM" in st:
-                    old = str(shape.fill.fore_color.rgb) if shape.fill.type == 1 else "(none)"
-                    shape.fill.solid()
-                    shape.fill.fore_color.rgb = card_rgb
-                    try:
-                        shape.line.color.rgb = RGBColor(0, 255, 255)
-                        shape.line.width = Pt(1.5)
-                    except Exception:
-                        pass
-                    self._record(slide_idx, role, shape_name, "fill", old, str(card_rgb),
-                                 shape_id=shape_id)
+                old_fill = "(none)"
+                if shape.fill.type == 1:
+                    old_fill = str(shape.fill.fore_color.rgb)
+                shape.fill.solid()
+                shape.fill.fore_color.rgb = card_rgb
+                self._record(slide_idx, role, shape_name, "fill.color",
+                             old_fill, str(card_rgb), shape_id=shape_id)
             except Exception:
                 pass
-            return
+            try:
+                old_line = "(none)"
+                if shape.line and shape.line.fill.type == 1:
+                    old_line = str(shape.line.color.rgb)
+                shape.line.color.rgb = aqua
+                shape.line.width = Pt(1.5)
+                self._record(slide_idx, role, shape_name, "border.color",
+                             old_line, "#00FFFF", shape_id=shape_id)
+            except Exception:
+                pass
 
-        # Text styling for text-bearing shapes
+        # --- STEP 2: TEXT STYLING ---
+        # Text color must contrast with the SHAPE's fill (not the slide bg).
+        # After step 1, the shape fill is brand card (dark) -> use light text.
+        # If fill wasn't styled (title on bg, or non-container), contrast against bg.
+        effective_bg = card_rgb if should_style_fill else bg_rgb
+
         if not shape.has_text_frame:
             return
 
-        is_title = role in ("TITLE", "SUBTITLE", "SECTION_HEADER")
-        is_caption = role == "CAPTION"
         target_font = title_font if is_title else body_font
         target_color = title_rgb if is_title else body_rgb
 
-        # Contrast enforcement: if target color == background, use alternative
-        contrast = _contrast_ratio(target_color, bg_rgb)
+        # Contrast check against the EFFECTIVE background
+        contrast = _contrast_ratio(target_color, effective_bg)
         if contrast < 2.0:
-            target_color = body_rgb  # fallback to white
-            contrast = _contrast_ratio(target_color, bg_rgb)
+            # Fallback: white text is readable on any dark surface
+            target_color = body_rgb
+            contrast = _contrast_ratio(target_color, effective_bg)
 
         if not shape.text_frame.text.strip():
             return
 
         for p in shape.text_frame.paragraphs:
-            # Force paragraph-level defaults (helps with inheritance)
             try:
                 _force_paragraph_color(p, target_color)
             except Exception:
@@ -359,7 +394,6 @@ class SemanticBrandTransformer:
             for r in p.runs:
                 font = r.font
 
-                # Record old color safely (before mutation)
                 old_color = "(inherited)"
                 try:
                     if font.color and font.color.type is not None and font.color.rgb:
@@ -367,22 +401,18 @@ class SemanticBrandTransformer:
                 except Exception:
                     pass
 
-                # Record old font name
                 old_name = font.name
 
-                # Force font name via XML
                 try:
                     _force_run_font(r, target_font)
                 except Exception:
                     font.name = target_font
 
-                # Force color via XML (must run BEFORE any font.color read)
                 try:
                     _force_run_color(r, target_color)
                 except Exception:
                     font.color.rgb = target_color
 
-                # Record changes
                 if old_name != target_font:
                     self._record(slide_idx, role, shape_name, "font.name",
                                  old_name or "(inherited)", target_font, shape_id=shape_id)
