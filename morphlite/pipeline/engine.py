@@ -34,6 +34,7 @@ class DeckAnalysis:
         self.deck_id = str(uuid.uuid4())[:8]
         self.slides: list[dict] = []
         self.plan: dict = {}
+        self.integrity: dict = {}
         self.input_path: str = ""
         self.output_path: str = ""
 
@@ -45,6 +46,7 @@ class DeckAnalysis:
             "n_slides": len(self.slides),
             "slides": self.slides,
             "transformation_plan": self.plan,
+            "integrity": self.integrity,
         }
 
 
@@ -85,6 +87,11 @@ class BrandMorphPipeline:
         analysis.input_path = input_path
 
         prs = pptx.Presentation(input_path)
+
+        # --- STAGE 1: DETERMINISTIC BRAND LAYER (always runs, always visible) ---
+        deterministic_mutations = self._apply_deterministic_brand(prs)
+
+        # --- STAGE 2: AST EXTRACTION + ML ANALYSIS ---
         from ..ast.extractor import extract_deck as _extract_ast
         from ..features.node_features_v2 import extract_slide_node_features_v2
         from ..features.node_features_v2 import FEATURE_NAMES_V2
@@ -176,19 +183,154 @@ class BrandMorphPipeline:
             plan_slides.append({"slide": slide_idx + 1, "decisions": slide_info["decisions"]})
 
         analysis.plan = {
-            "plan_version": "v0.1",
+            "plan_version": "v0.2",
             "generated_by": "BrandMorphPipeline",
+            "deterministic_mutations": deterministic_mutations,
+            "deterministic_changed": len(deterministic_mutations),
             "slides": plan_slides,
             "totals": self._totals_v2(all_decisions),
         }
 
+        # --- STAGE 4: INTEGRITY VERIFICATION ---
+        import hashlib
+        input_hash = hashlib.sha256(Path(input_path).read_bytes()).hexdigest()
+        integrity = {"input_sha256": input_hash, "deterministic_mutations": len(deterministic_mutations)}
+
         if output_path:
             prs.save(output_path)
             analysis.output_path = output_path
+            output_hash = hashlib.sha256(Path(output_path).read_bytes()).hexdigest()
+            integrity["output_sha256"] = output_hash
+            integrity["binary_changed"] = input_hash != output_hash
+            integrity["content_changed"] = integrity["binary_changed"]
+            if not integrity["binary_changed"] and deterministic_mutations:
+                integrity["integrity_failure"] = True
 
+        analysis.integrity = integrity
         return analysis
 
-    def _compute_inline_features(self, shape) -> dict | None:
+    def _apply_deterministic_brand(self, prs) -> list[dict]:
+        """Applies visible brand styling to every slide. Always runs before ML."""
+        bp = self.profile
+        mutations = []
+
+        bg_color = RGBColor(*bp._hex_tuple(bp.dark_hex))
+        card_color = RGBColor(*bp._hex_tuple(bp.card_hex))
+        gold_color = bp.gold_rgb
+        white_color = bp.white_rgb
+
+        for slide_idx, slide in enumerate(prs.slides):
+            # 1. Background
+            try:
+                old_bg = None
+                try:
+                    if slide.background.fill.type == 1:
+                        old_bg = str(slide.background.fill.fore_color.rgb)
+                except Exception:
+                    pass
+                slide.background.fill.solid()
+                slide.background.fill.fore_color.rgb = bg_color
+                mutations.append({
+                    "slide": slide_idx + 1, "stage": "DETERMINISTIC",
+                    "property": "slide.background", "shape": "(background)",
+                    "before": old_bg or "(inherit)", "after": str(bg_color),
+                    "visible_expected": True,
+                })
+            except Exception:
+                pass
+
+            for shape in _walk_shapes(slide):
+                shape_id = getattr(shape, "shape_id", 0)
+                shape_name = shape.name or ""
+                has_tf = shape.has_text_frame
+
+                # 2. Card/rectangle shapes: brand fill + border
+                st = str(getattr(shape, "shape_type", ""))
+                if "AUTO_SHAPE" in st or "FREEFORM" in st:
+                    try:
+                        if shape.fill.type == 1:
+                            old_fill = str(shape.fill.fore_color.rgb)
+                            shape.fill.fore_color.rgb = card_color
+                            mutations.append({
+                                "slide": slide_idx + 1, "stage": "DETERMINISTIC",
+                                "property": "fill.color", "shape": shape_name,
+                                "shape_id": shape_id,
+                                "before": old_fill, "after": str(card_color),
+                                "visible_expected": True,
+                            })
+                    except Exception:
+                        pass
+                    try:
+                        if shape.line and shape.line.fill.type == 1:
+                            old_line = str(shape.line.color.rgb) if shape.line.color else "(none)"
+                            shape.line.color.rgb = RGBColor(0, 255, 255)
+                            mutations.append({
+                                "slide": slide_idx + 1, "stage": "DETERMINISTIC",
+                                "property": "line.color", "shape": shape_name,
+                                "shape_id": shape_id,
+                                "before": old_line, "after": "#00FFFF",
+                                "visible_expected": True,
+                            })
+                    except Exception:
+                        pass
+
+                # 3. Text normalization
+                if not has_tf:
+                    continue
+                is_title = self._is_title_like(shape, slide_idx)
+                for p in shape.text_frame.paragraphs:
+                    for run in p.runs:
+                        font = run.font
+
+                        # Font family
+                        old_font = font.name
+                        target_font = bp.heading_font if is_title else bp.body_font
+                        if old_font != target_font:
+                            font.name = target_font
+                            mutations.append({
+                                "slide": slide_idx + 1, "stage": "DETERMINISTIC",
+                                "property": "font.name", "shape": shape_name,
+                                "shape_id": shape_id,
+                                "before": old_font or "(inherited)", "after": target_font,
+                                "visible_expected": True,
+                            })
+
+                        # Font color
+                        try:
+                            old_color = None
+                            if font.color and font.color.rgb:
+                                old_color = str(font.color.rgb)
+                            target_color = gold_color if is_title else white_color
+                            if old_color != str(target_color):
+                                font.color.rgb = target_color
+                                mutations.append({
+                                    "slide": slide_idx + 1, "stage": "DETERMINISTIC",
+                                    "property": "font.color", "shape": shape_name,
+                                    "shape_id": shape_id,
+                                    "before": old_color or "(theme)", "after": str(target_color),
+                                    "visible_expected": True,
+                                })
+                        except Exception:
+                            pass
+        return mutations
+
+    def _is_title_like(self, shape, slide_idx) -> bool:
+        try:
+            name_lower = (shape.name or "").lower()
+            if "title" in name_lower:
+                return True
+            if not shape.has_text_frame:
+                return False
+            tf = shape.text_frame
+            for p in tf.paragraphs:
+                for r in p.runs:
+                    if r.font.size and r.font.size.pt >= 20:
+                        return True
+            y = shape.top / 914400.0 if shape.top else 0
+            h = shape.height / 914400.0 if shape.height else 0
+            return y < 1.5 and h > 0.5
+        except Exception:
+            return False
         """Compute a minimal V2-compatible feature dict from a python-pptx shape."""
         try:
             x = shape.left / 914400.0 if shape.left else 0.0

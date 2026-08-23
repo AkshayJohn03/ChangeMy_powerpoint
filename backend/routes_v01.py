@@ -82,6 +82,7 @@ async def process_deck(file: UploadFile = File(...)):
         "deck_id": deck_id,
         "n_slides": len(result.slides),
         "totals": totals,
+        "integrity": result.integrity,
         "slides_preview": [
             {"slide": s["slide_number"], **s["summary"]}
             for s in result.slides[:5]
