@@ -88,8 +88,11 @@ class BrandMorphPipeline:
 
         prs = pptx.Presentation(input_path)
 
-        # --- STAGE 1: DETERMINISTIC BRAND LAYER (always runs, always visible) ---
-        deterministic_mutations = self._apply_deterministic_brand(prs)
+        # --- STAGE 1: SEMANTIC BRAND LAYER (always runs, always visible) ---
+        from .semantic_brand import SemanticBrandTransformer
+
+        transformer = SemanticBrandTransformer(self.profile)
+        deterministic_mutations = transformer.transform(prs)
 
         # --- STAGE 2: AST EXTRACTION + ML ANALYSIS ---
         from ..ast.extractor import extract_deck as _extract_ast
