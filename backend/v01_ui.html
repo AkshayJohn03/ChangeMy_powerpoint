@@ -67,17 +67,23 @@ const d=await r.json();deckId=d.deck_id;renderResults(d)}catch(e){alert('Error: 
 function show(id){['upload','processing','results'].forEach(s=>document.getElementById(s).classList.toggle('hidden',s!==id))}
 function setText(t){document.getElementById('ptext').textContent=t}
 function renderResults(d){
-const t=d.totals;
+const t=d.totals||{};
+const bp=t.by_policy||{};
+const mv=t.mutation_verification||{};
+const nApply=bp.APPLY||0,nReview=bp.REVIEW||0,nPreserve=bp.PRESERVE||0,nNoop=bp.NOOP||0;
+const nChanged=mv.CHANGED||0,nNoCh=mv.NO_CHANGE||0,nUns=mv.UNSUPPORTED||0,nFail=mv.FAILED||0;
 document.getElementById('sgrid').innerHTML=`
-<div class="stat"><div class="num">${t.nodes_total}</div><div class="lbl">Nodes</div></div>
-<div class="stat"><div class="num">${t.policy_apply||0}</div><div class="lbl">Applied</div></div>
-<div class="stat"><div class="num">${t.policy_review||0}</div><div class="lbl">Review</div></div>
-<div class="stat"><div class="num">${t.policy_noop||0}</div><div class="lbl">Preserved</div></div>`;
+<div class="stat"><div class="num">${t.nodes_total||0}</div><div class="lbl">Nodes</div></div>
+<div class="stat"><div class="num">${nChanged}</div><div class="lbl">Changed</div></div>
+<div class="stat"><div class="num">${nReview}</div><div class="lbl">Review</div></div>
+<div class="stat"><div class="num">${nNoop+nPreserve}</div><div class="lbl">Preserved</div></div>
+<div class="stat"><div class="num" style="color:#8899aa;font-size:18px">${nNoCh} no-change · ${nUns} unsupp · ${nFail} fail</div><div class="lbl">Mutation detail</div></div>`;
 const sc=document.getElementById('slides');sc.innerHTML='';
-d.slides_preview.forEach(s=>{
+(d.slides_preview||[]).forEach(s=>{
+const ch=s.changed||0,nc=s.no_change||0,rv=s.review||0,pr=s.preserved||0,tt=s.total||0;
 const card=document.createElement('div');card.className='slide-card';
-card.innerHTML=`<strong>Slide ${s.slide}</strong> <span style="color:#667">(${s.total} nodes)</span><br>
-<span class="badge b-apply">${s.applied} applied</span> <span class="badge b-review">${s.review} review</span> <span class="badge b-noop">${s.preserved} preserved</span>`;
+card.innerHTML=`<strong>Slide ${s.slide}</strong> <span style="color:#667">(${tt} nodes)</span><br>
+<span class="badge b-apply">${ch} changed</span> <span class="badge b-review">${rv} review</span> <span class="badge b-noop">${nc} no-change</span> <span class="badge b-noop">${pr} preserved</span>`;
 sc.appendChild(card)});
 show('results')}
 </script></body></html>

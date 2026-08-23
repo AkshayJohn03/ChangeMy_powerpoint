@@ -118,7 +118,7 @@ class BrandMorphPipeline:
             decisions = self.engine.decide_batch(feature_dicts)
             decisions = self.engine.policy.apply_slide_budget(decisions)
 
-            applied = changed = review = preserved = noop = no_change = failed = 0
+            changed = no_change = unsupported = failed = review = preserved = noop = 0
             mutation_results = []
             for ni, dec in enumerate(decisions):
                 nid = node_ids[ni]
@@ -140,11 +140,11 @@ class BrandMorphPipeline:
                     entry["mutation"] = md
                     mutation_results.append(md)
                     if mr.status == "CHANGED":
-                        applied += 1
                         changed += 1
                     elif mr.status == "NO_CHANGE":
                         no_change += 1
-                        preserved += 1
+                    elif mr.status == "UNSUPPORTED":
+                        unsupported += 1
                     elif mr.status == "FAILED":
                         failed += 1
                     else:
@@ -163,6 +163,7 @@ class BrandMorphPipeline:
                 "total": len(decisions),
                 "changed": changed,
                 "no_change": no_change,
+                "unsupported": unsupported,
                 "failed": failed,
                 "review": review,
                 "preserved": preserved + noop,

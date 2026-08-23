@@ -54,8 +54,24 @@ async def process_deck(file: UploadFile = File(...)):
             os.remove(tmp_in.name)
 
     deck_id = result.deck_id
+    analysis = result.to_json()
+
+    # Contract reconciliation invariants
+    totals = analysis.get("transformation_plan", {}).get("totals", {})
+    bp = totals.get("by_policy", {})
+    policy_sum = sum(bp.values())
+    nodes_total = totals.get("nodes_total", 0)
+    if policy_sum > 0 and policy_sum != nodes_total:
+        print(f"[WARN] policy sum {policy_sum} != nodes_total {nodes_total}")
+
+    mv = totals.get("mutation_verification", {})
+    mv_total = sum(mv.values())
+    apply_count = bp.get("APPLY", 0)
+    if mv_total > apply_count:
+        print(f"[WARN] mutation total {mv_total} > apply count {apply_count}")
+
     _sessions[deck_id] = {
-        "analysis": result.to_json(),
+        "analysis": analysis,
         "output_path": tmp_out,
         "work_dir": out_dir,
         "input_name": file.filename,
@@ -65,7 +81,7 @@ async def process_deck(file: UploadFile = File(...)):
         "status": "success",
         "deck_id": deck_id,
         "n_slides": len(result.slides),
-        "totals": result.plan.get("totals", {}),
+        "totals": totals,
         "slides_preview": [
             {"slide": s["slide_number"], **s["summary"]}
             for s in result.slides[:5]
