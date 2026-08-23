@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BrandMorph v0.1</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#030C1E;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px}
+h1{color:#FFB81C;font-size:2em;margin-bottom:8px}
+.sub{color:#8899aa;margin-bottom:32px}
+.card{background:#081632;border:1px solid #1a2a4a;border-radius:12px;padding:24px;width:100%;max-width:720px;margin-bottom:16px}
+.drop{border:2px dashed #FFB81C;border-radius:8px;padding:48px;text-align:center;cursor:pointer;transition:border-color .3s}
+.drop:hover,.drop.over{border-color:#00FFFF;background:rgba(255,184,28,.05)}
+.btn{background:#FFB81C;color:#030C1E;border:none;padding:12px 32px;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.spin{width:40px;height:40px;border:3px solid #FFB81C33;border-top-color:#FFB81C;border-radius:50%;animation:sp 1s linear infinite;margin:20px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.bar{display:flex;gap:8px;margin:16px 0}
+.pill{padding:4px 14px;border-radius:12px;font-size:13px;font-weight:bold}
+.pill.g{background:#1a4a2a;color:#4CAF50}.pill.o{background:#4a3a1a;color:#FF9800}.pill.gr{background:#2a2a3a;color:#888}
+.slide-card{border-left:3px solid #FFB81C;padding:12px 16px;margin:8px 0}
+.dec{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #0d1a3a}
+.dec:last-child{border:none}
+.badge{padding:2px 10px;border-radius:10px;font-size:11px;font-weight:bold}
+.b-apply{background:#1a4a2a;color:#4CAF50}.b-review{background:#4a3a1a;color:#FF9800}.b-noop{background:#222;color:#777}.b-pres{background:#222;color:#aaa}
+.hidden{display:none}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+.stat{text-align:center;padding:12px;background:#0a1a3a;border-radius:8px}
+.stat .num{font-size:28px;font-weight:bold;color:#FFB81C}
+.stat .lbl{font-size:12px;color:#8899aa}
+</style>
+</head><body>
+<h1>BrandMorph</h1><p class="sub">AI-powered deck brandification · v0.1</p>
+
+<div id="upload" class="card">
+<div class="drop" id="dz" onclick="document.getElementById('f').click()">
+<p style="font-size:18px;margin-bottom:8px">Drop your PowerPoint here</p>
+<p style="color:#667">or click to browse</p>
+<input type="file" id="f" accept=".pptx" style="display:none" onchange="handleFile(this.files[0])">
+</div><br>
+<button class="btn" id="btn" disabled onclick="process()">Analyze &amp; Transform</button>
+</div>
+
+<div id="processing" class="card hidden">
+<div class="spin"></div><p id="ptext" style="text-align:center">Uploading deck...</p>
+</div>
+
+<div id="results" class="card hidden">
+<h2 style="margin-bottom:16px">Analysis Complete</h2>
+<div class="summary-grid" id="sgrid"></div>
+<div id="slides"></div>
+<br><button class="btn" onclick="location.href='/api/v01/export/'+deckId">Download Transformed PPTX</button>
+</div>
+
+<script>
+let deckId=null,file=null;
+const dz=document.getElementById('dz');
+dz.ondragover=e=>{e.preventDefault();dz.classList.add('over')};
+dz.ondragleave=()=>dz.classList.remove('over');
+dz.ondrop=e=>{e.preventDefault();dz.classList.remove('over');handleFile(e.dataTransfer.files[0])};
+function handleFile(f){if(!f||!f.name.endsWith('.pptx'))return alert('Please select a .pptx file');file=f;document.getElementById('btn').disabled=false;dz.querySelector('p').textContent=f.name+' ('+(f.size/1024/1024).toFixed(1)+' MB)'}
+async function process(){if(!file)return;show('processing');setText('Uploading deck...');
+const fd=new FormData();fd.append('file',file);
+try{setText('Running BrandMorph pipeline...');const r=await fetch('/api/v01/process',{method:'POST',body:fd});if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText)}
+const d=await r.json();deckId=d.deck_id;renderResults(d)}catch(e){alert('Error: '+e.message);show('upload')}
+}
+function show(id){['upload','processing','results'].forEach(s=>document.getElementById(s).classList.toggle('hidden',s!==id))}
+function setText(t){document.getElementById('ptext').textContent=t}
+function renderResults(d){
+const t=d.totals;
+document.getElementById('sgrid').innerHTML=`
+<div class="stat"><div class="num">${t.nodes_total}</div><div class="lbl">Nodes</div></div>
+<div class="stat"><div class="num">${t.policy_apply||0}</div><div class="lbl">Applied</div></div>
+<div class="stat"><div class="num">${t.policy_review||0}</div><div class="lbl">Review</div></div>
+<div class="stat"><div class="num">${t.policy_noop||0}</div><div class="lbl">Preserved</div></div>`;
+const sc=document.getElementById('slides');sc.innerHTML='';
+d.slides_preview.forEach(s=>{
+const card=document.createElement('div');card.className='slide-card';
+card.innerHTML=`<strong>Slide ${s.slide}</strong> <span style="color:#667">(${s.total} nodes)</span><br>
+<span class="badge b-apply">${s.applied} applied</span> <span class="badge b-review">${s.review} review</span> <span class="badge b-noop">${s.preserved} preserved</span>`;
+sc.appendChild(card)});
+show('results')}
+</script></body></html>

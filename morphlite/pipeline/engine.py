@@ -24,21 +24,7 @@ from ..ast.extractor import flatten_nodes
 from ..features.node_features_v2 import extract_slide_node_features_v2
 from ..inference.decision import DecisionEngine
 from ..inference.policy import APPLY, REVIEW, PRESERVE, NOOP
-from ..rules.brand_tokens import BRAND_COLORS
-
-BRAND_FONT_BODY = "Arial"
-BRAND_GOLD = RGBColor(0xFF, 0xB8, 0x1C)
-BRAND_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
-BRAND_DARK = RGBColor(0x03, 0x0C, 0x1E)
-
-LEGACY_COLOR_MAP = {
-    RGBColor(0xFF, 0xC0, 0x00): BRAND_GOLD,
-    RGBColor(0xFF, 0xB2, 0x12): BRAND_GOLD,
-    RGBColor(0xEB, 0xAC, 0x00): BRAND_GOLD,
-}
-
-RESIZE_MAP = {12.0: 10.0, 14.0: 12.0, 16.0: 12.0, 20.0: 12.0,
-              32.0: 28.0, 36.0: 24.0, 16.7: 12.0}
+from .brand_profile import DEFAULT_PROFILE, BrandProfile
 
 APPLYABLE = {"RESTYLE", "RESIZE", "RECOLOR", "REMOVE"}
 
@@ -85,9 +71,10 @@ def _walk_shapes_recursive(group):
 
 class BrandMorphPipeline:
 
-    def __init__(self):
+    def __init__(self, profile: BrandProfile | None = None):
         from morphlite.inference.decision import DecisionEngine
 
+        self.profile = profile or DEFAULT_PROFILE
         self.engine = DecisionEngine()
 
     def process(self, input_path: str, output_path: str | None = None) -> DeckAnalysis:
@@ -178,6 +165,7 @@ class BrandMorphPipeline:
 
     def _apply_mutation(self, shape, decision: dict):
         action = decision["action"]
+        bp = self.profile
         if action == "REMOVE":
             try:
                 shape._element.getparent().remove(shape._element)
@@ -190,23 +178,21 @@ class BrandMorphPipeline:
             for run in p.runs:
                 font = run.font
                 if action == "RESTYLE":
-                    if font.name and font.name.lower() not in ("roboto", "arial"):
-                        font.name = BRAND_FONT_BODY
+                    if font.name and font.name.lower() not in (bp.body_font.lower(),):
+                        font.name = bp.body_font
                 elif action == "RESIZE":
                     sz = font.size
                     if sz is None:
                         continue
-                    pt = sz.pt
-                    mapped = RESIZE_MAP.get(round(pt, 1))
+                    mapped = bp.resize_map.get(round(sz.pt, 1))
                     if mapped is not None:
                         font.size = Pt(mapped)
                 elif action == "RECOLOR":
                     try:
                         if font.color and font.color.rgb:
-                            rgb = font.color.rgb
-                            mapped = LEGACY_COLOR_MAP.get(rgb)
-                            if mapped:
-                                font.color.rgb = mapped
+                            target = bp.legacy_color_target(font.color.rgb)
+                            if target is not None:
+                                font.color.rgb = target
                     except Exception:
                         pass
 

@@ -20,6 +20,17 @@ router = APIRouter(prefix="/api/v01", tags=["v01"])
 
 _sessions: dict[str, dict] = {}
 
+_UI_HTML = Path(__file__).resolve().parent / "v01_ui.html"
+
+from fastapi.responses import HTMLResponse  # noqa: E402
+
+
+@router.get("/", response_class=HTMLResponse)
+async def index():
+    if _UI_HTML.exists():
+        return HTMLResponse(_UI_HTML.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>BrandMorph v0.1</h1><p>UI file missing</p>")
+
 
 @router.post("/process")
 async def process_deck(file: UploadFile = File(...)):

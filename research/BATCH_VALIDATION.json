@@ -1,0 +1,303 @@
+{
+ "summary": {
+  "decks_tested": 15,
+  "decks_ok": 15,
+  "decks_failed": 0,
+  "total_nodes": 9476,
+  "total_applied": 1435,
+  "mean_apply_rate": 0.1514,
+  "total_review": 178,
+  "all_outputs_valid": true,
+  "mean_time_sec": 5.7
+ },
+ "per_deck": [
+  {
+   "deck": "deck_01_raw",
+   "source_file": "deck_0045",
+   "status": "OK",
+   "slides": 12,
+   "nodes_total": 437,
+   "applied": 76,
+   "review": 19,
+   "noop": 340,
+   "preserved": 2,
+   "by_action": {
+    "UNCHANGED": 340,
+    "REMOVE": 28,
+    "RESIZE": 48,
+    "MOVE": 21
+   },
+   "time_sec": 9.0,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_02_raw",
+   "source_file": "deck_0048",
+   "status": "OK",
+   "slides": 25,
+   "nodes_total": 462,
+   "applied": 89,
+   "review": 27,
+   "noop": 343,
+   "preserved": 3,
+   "by_action": {
+    "RESIZE": 78,
+    "UNCHANGED": 343,
+    "MOVE": 30,
+    "REMOVE": 11
+   },
+   "time_sec": 5.3,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_03_raw",
+   "source_file": "deck_0050",
+   "status": "OK",
+   "slides": 2,
+   "nodes_total": 54,
+   "applied": 28,
+   "review": 4,
+   "noop": 22,
+   "preserved": 0,
+   "by_action": {
+    "RESIZE": 20,
+    "UNCHANGED": 22,
+    "RECOLOR": 4,
+    "REMOVE": 8
+   },
+   "time_sec": 1.3,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_04_raw",
+   "source_file": "deck_0052",
+   "status": "OK",
+   "slides": 31,
+   "nodes_total": 494,
+   "applied": 151,
+   "review": 21,
+   "noop": 311,
+   "preserved": 11,
+   "by_action": {
+    "RESIZE": 116,
+    "REMOVE": 35,
+    "UNCHANGED": 311,
+    "MOVE": 31,
+    "RECOLOR": 1
+   },
+   "time_sec": 5.6,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_05_raw",
+   "source_file": "deck_0053",
+   "status": "OK",
+   "slides": 2,
+   "nodes_total": 110,
+   "applied": 9,
+   "review": 0,
+   "noop": 101,
+   "preserved": 0,
+   "by_action": {
+    "RESTYLE": 1,
+    "UNCHANGED": 101,
+    "REMOVE": 6,
+    "RESIZE": 2
+   },
+   "time_sec": 2.3,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_06_raw",
+   "source_file": "deck_0056",
+   "status": "OK",
+   "slides": 40,
+   "nodes_total": 1186,
+   "applied": 222,
+   "review": 49,
+   "noop": 896,
+   "preserved": 19,
+   "by_action": {
+    "REMOVE": 129,
+    "RESIZE": 90,
+    "RESTYLE": 5,
+    "UNCHANGED": 896,
+    "MOVE": 54,
+    "RECOLOR": 12
+   },
+   "time_sec": 7.8,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_07_raw",
+   "source_file": "deck_0057",
+   "status": "OK",
+   "slides": 11,
+   "nodes_total": 214,
+   "applied": 38,
+   "review": 14,
+   "noop": 161,
+   "preserved": 1,
+   "by_action": {
+    "RESIZE": 15,
+    "REMOVE": 15,
+    "MOVE": 15,
+    "UNCHANGED": 161,
+    "RESTYLE": 8
+   },
+   "time_sec": 3.0,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_08_raw",
+   "source_file": "deck_0060",
+   "status": "OK",
+   "slides": 28,
+   "nodes_total": 695,
+   "applied": 180,
+   "review": 1,
+   "noop": 506,
+   "preserved": 8,
+   "by_action": {
+    "RESIZE": 77,
+    "REMOVE": 105,
+    "RECOLOR": 2,
+    "UNCHANGED": 506,
+    "MOVE": 5
+   },
+   "time_sec": 6.9,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_09_raw",
+   "source_file": "deck_0062",
+   "status": "OK",
+   "slides": 9,
+   "nodes_total": 230,
+   "applied": 59,
+   "review": 19,
+   "noop": 151,
+   "preserved": 1,
+   "by_action": {
+    "RESIZE": 50,
+    "REMOVE": 9,
+    "UNCHANGED": 151,
+    "MOVE": 20
+   },
+   "time_sec": 3.6,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_10_raw",
+   "source_file": "deck_0063",
+   "status": "OK",
+   "slides": 25,
+   "nodes_total": 869,
+   "applied": 89,
+   "review": 19,
+   "noop": 759,
+   "preserved": 2,
+   "by_action": {
+    "UNCHANGED": 759,
+    "REMOVE": 37,
+    "RESIZE": 52,
+    "MOVE": 21
+   },
+   "time_sec": 7.6,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_11_raw",
+   "source_file": "deck_0064",
+   "status": "OK",
+   "slides": 26,
+   "nodes_total": 590,
+   "applied": 49,
+   "review": 0,
+   "noop": 540,
+   "preserved": 1,
+   "by_action": {
+    "RESIZE": 29,
+    "REMOVE": 21,
+    "UNCHANGED": 540
+   },
+   "time_sec": 4.9,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_12_raw",
+   "source_file": "deck_0065",
+   "status": "OK",
+   "slides": 55,
+   "nodes_total": 2133,
+   "applied": 182,
+   "review": 0,
+   "noop": 1946,
+   "preserved": 5,
+   "by_action": {
+    "RESIZE": 83,
+    "REMOVE": 104,
+    "UNCHANGED": 1946
+   },
+   "time_sec": 9.9,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_13_raw",
+   "source_file": "deck_0066",
+   "status": "OK",
+   "slides": 4,
+   "nodes_total": 101,
+   "applied": 36,
+   "review": 4,
+   "noop": 60,
+   "preserved": 1,
+   "by_action": {
+    "RESIZE": 29,
+    "UNCHANGED": 60,
+    "RECOLOR": 4,
+    "REMOVE": 8
+   },
+   "time_sec": 3.4,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_14_raw",
+   "source_file": "deck_0067",
+   "status": "OK",
+   "slides": 45,
+   "nodes_total": 1195,
+   "applied": 189,
+   "review": 1,
+   "noop": 996,
+   "preserved": 9,
+   "by_action": {
+    "RESIZE": 82,
+    "REMOVE": 109,
+    "UNCHANGED": 996,
+    "RECOLOR": 2,
+    "MOVE": 6
+   },
+   "time_sec": 9.1,
+   "output_valid": true
+  },
+  {
+   "deck": "deck_15_raw",
+   "source_file": "deck_0068",
+   "status": "OK",
+   "slides": 26,
+   "nodes_total": 706,
+   "applied": 38,
+   "review": 0,
+   "noop": 668,
+   "preserved": 0,
+   "by_action": {
+    "RESIZE": 21,
+    "UNCHANGED": 668,
+    "REMOVE": 17
+   },
+   "time_sec": 5.4,
+   "output_valid": true
+  }
+ ]
+}
