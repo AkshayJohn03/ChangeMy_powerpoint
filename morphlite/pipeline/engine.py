@@ -76,6 +76,9 @@ class BrandMorphPipeline:
 
         self.profile = profile or DEFAULT_PROFILE
         self.engine = DecisionEngine()
+        from .mutation_engine import MutationEngine
+
+        self.mutation_engine = MutationEngine(self.profile)
 
     def process(self, input_path: str, output_path: str | None = None) -> DeckAnalysis:
         analysis = DeckAnalysis()
@@ -106,36 +109,50 @@ class BrandMorphPipeline:
             feature_dicts = extract_slide_node_features_v2(ast_slide)
             node_ids = [nd["id"] for nd in ast_nodes_flat]
 
-            decisions = self.engine.decide_batch(feature_dicts)
-            shapes_list = shape_table.get(slide_idx, [])
+            shape_map = {}
+            for shape in shape_table.get(slide_idx, []):
+                sid = getattr(shape, "shape_id", None)
+                if sid is not None:
+                    shape_map[sid] = shape
 
-            applied = review = preserved = noop = 0
+            decisions = self.engine.decide_batch(feature_dicts)
+
+            applied = changed = review = preserved = noop = no_change = failed = 0
+            mutation_results = []
             for ni, dec in enumerate(decisions):
                 nid = node_ids[ni]
-                sid = int(nid.rsplit("__n", 1)[1])
-                si_shape = shapes_list[sid] if sid < len(shapes_list) else None
+                node_shape_id = ast_nodes_flat[ni].get("shape_id")
+                target_shape = shape_map.get(node_shape_id) if node_shape_id is not None else None
 
                 entry = {
-                    "shape_index": sid,
                     "node_id": nid,
+                    "shape_id": node_shape_id,
                     "predicted_action": dec["action"],
                     "confidence": dec["confidence"],
                     "policy": dec["policy"],
                     "reason": dec["reason"],
                 }
 
-                if dec["policy"] == APPLY and dec["action"] in APPLYABLE and si_shape is not None:
-                    self._apply_mutation(si_shape, dec)
-                    entry["executed"] = True
-                    applied += 1
+                if dec["policy"] == APPLY and dec["action"] in APPLYABLE and target_shape is not None:
+                    mr = self.mutation_engine.apply(target_shape, dec)
+                    md = mr.to_dict()
+                    entry["mutation"] = md
+                    mutation_results.append(md)
+                    if mr.status == "CHANGED":
+                        applied += 1
+                        changed += 1
+                    elif mr.status == "NO_CHANGE":
+                        no_change += 1
+                        preserved += 1
+                    elif mr.status == "FAILED":
+                        failed += 1
+                    else:
+                        preserved += 1
                 elif dec["policy"] == REVIEW:
-                    entry["executed"] = False
                     review += 1
                 elif dec["policy"] == NOOP:
-                    entry["executed"] = False
                     noop += 1
                 else:
-                    entry["executed"] = False
                     preserved += 1
 
                 slide_info["decisions"].append(entry)
@@ -143,10 +160,16 @@ class BrandMorphPipeline:
 
             slide_info["summary"] = {
                 "total": len(decisions),
-                "applied": applied,
+                "changed": changed,
+                "no_change": no_change,
+                "failed": failed,
                 "review": review,
                 "preserved": preserved + noop,
             }
+            slide_info["mutation_results"] = [
+                m.to_dict() if hasattr(m, "to_dict") else m
+                for m in mutation_results
+            ]
             analysis.slides.append(slide_info)
             plan_slides.append({"slide": slide_idx + 1, "decisions": slide_info["decisions"]})
 
@@ -154,7 +177,7 @@ class BrandMorphPipeline:
             "plan_version": "v0.1",
             "generated_by": "BrandMorphPipeline",
             "slides": plan_slides,
-            "totals": self._totals(all_decisions),
+            "totals": self._totals_v2(all_decisions),
         }
 
         if output_path:
@@ -162,39 +185,6 @@ class BrandMorphPipeline:
             analysis.output_path = output_path
 
         return analysis
-
-    def _apply_mutation(self, shape, decision: dict):
-        action = decision["action"]
-        bp = self.profile
-        if action == "REMOVE":
-            try:
-                shape._element.getparent().remove(shape._element)
-            except Exception:
-                pass
-            return
-        if not shape.has_text_frame:
-            return
-        for p in shape.text_frame.paragraphs:
-            for run in p.runs:
-                font = run.font
-                if action == "RESTYLE":
-                    if font.name and font.name.lower() not in (bp.body_font.lower(),):
-                        font.name = bp.body_font
-                elif action == "RESIZE":
-                    sz = font.size
-                    if sz is None:
-                        continue
-                    mapped = bp.resize_map.get(round(sz.pt, 1))
-                    if mapped is not None:
-                        font.size = Pt(mapped)
-                elif action == "RECOLOR":
-                    try:
-                        if font.color and font.color.rgb:
-                            target = bp.legacy_color_target(font.color.rgb)
-                            if target is not None:
-                                font.color.rgb = target
-                    except Exception:
-                        pass
 
     def _compute_inline_features(self, shape) -> dict | None:
         """Compute a minimal V2-compatible feature dict from a python-pptx shape."""
@@ -258,6 +248,27 @@ class BrandMorphPipeline:
         return fd
 
     @staticmethod
+    def _totals_v2(all_decisions: list[dict]) -> dict:
+        policy_counts: dict[str, int] = {}
+        action_counts: dict[str, int] = {}
+        mutation_statuses: dict[str, int] = {}
+        for d in all_decisions:
+            policy_counts[d.get("policy", "?")] = policy_counts.get(d.get("policy", "?"), 0) + 1
+            action_counts[d.get("predicted_action", "?")] = action_counts.get(d.get("predicted_action", "?"), 0) + 1
+            mr = d.get("mutation", {})
+            if mr:
+                st = mr.get("status", "?")
+                mutation_statuses[st] = mutation_statuses.get(st, 0) + 1
+        return {
+            "nodes_total": len(all_decisions),
+            "by_policy": dict(policy_counts),
+            "by_action": dict(action_counts),
+            "mutation_verification": dict(mutation_statuses),
+            "changed": mutation_statuses.get("CHANGED", 0),
+            "no_change": mutation_statuses.get("NO_CHANGE", 0),
+            "failed": mutation_statuses.get("FAILED", 0),
+        }
+
     def _totals(decisions: list[dict]) -> dict:
         counts: dict[str, int] = {}
         for d in decisions:

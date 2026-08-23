@@ -36,6 +36,12 @@ class BrandProfile:
         (0xEB, 0xAC, 0x00),
     )
 
+    font_tiers: list = field(default_factory=lambda: [
+        {"name": "heading", "min": 24, "target": 28},
+        {"name": "body", "min": 12, "target": 14},
+        {"name": "caption", "min": 0, "target": 10},
+    ])
+
     @property
     def gold_rgb(self) -> RGBColor:
         return RGBColor(*self._hex_tuple(self.gold_hex))
