@@ -1,0 +1,272 @@
+{
+ "schema": "mutation_audit_v1",
+ "decks_tested": 15,
+ "decks_ok": 15,
+ "total_changed": 1101,
+ "total_no_change": 290,
+ "total_unsupported": 0,
+ "total_failed": 0,
+ "mutation_rate": 0.7915,
+ "by_action": {
+  "REMOVE": 638,
+  "RESIZE": 453,
+  "RESTYLE": 10
+ },
+ "by_property": {
+  "size_pt": 453,
+  "font": 10
+ },
+ "font_transitions": {
+  "top_sources": [
+   [
+    "Bahnschrift",
+    8
+   ],
+   [
+    "Times New Roman",
+    2
+   ]
+  ],
+  "top_targets": [
+   [
+    "Arial",
+    10
+   ]
+  ]
+ },
+ "size_changes_sample": [
+  {
+   "before": 12.0,
+   "after": 14.0
+  },
+  {
+   "before": 12.0,
+   "after": 14.0
+  },
+  {
+   "before": 12.0,
+   "after": 14.0
+  },
+  {
+   "before": 27.0,
+   "after": 28.0
+  },
+  {
+   "before": 32.0,
+   "after": 28.0
+  },
+  {
+   "before": 24.0,
+   "after": 28.0
+  },
+  {
+   "before": 12.0,
+   "after": 14.0
+  },
+  {
+   "before": 12.0,
+   "after": 14.0
+  },
+  {
+   "before": 12.0,
+   "after": 14.0
+  },
+  {
+   "before": 32.0,
+   "after": 28.0
+  },
+  {
+   "before": 18.0,
+   "after": 14.0
+  },
+  {
+   "before": 32.0,
+   "after": 28.0
+  },
+  {
+   "before": 16.0,
+   "after": 14.0
+  },
+  {
+   "before": 16.0,
+   "after": 14.0
+  },
+  {
+   "before": 16.0,
+   "after": 14.0
+  },
+  {
+   "before": 16.0,
+   "after": 14.0
+  },
+  {
+   "before": 16.0,
+   "after": 14.0
+  },
+  {
+   "before": 32.0,
+   "after": 28.0
+  },
+  {
+   "before": 34.0,
+   "after": 28.0
+  },
+  {
+   "before": 34.0,
+   "after": 28.0
+  }
+ ],
+ "color_changes_sample": [],
+ "per_deck": [
+  {
+   "deck": "deck_01_raw",
+   "status": "OK",
+   "slides": 12,
+   "mutations_changed": 46,
+   "mutations_no_change": 23,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 5.7
+  },
+  {
+   "deck": "deck_02_raw",
+   "status": "OK",
+   "slides": 25,
+   "mutations_changed": 69,
+   "mutations_no_change": 20,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 4.2
+  },
+  {
+   "deck": "deck_03_raw",
+   "status": "OK",
+   "slides": 2,
+   "mutations_changed": 17,
+   "mutations_no_change": 10,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 1.0
+  },
+  {
+   "deck": "deck_04_raw",
+   "status": "OK",
+   "slides": 31,
+   "mutations_changed": 118,
+   "mutations_no_change": 27,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 4.3
+  },
+  {
+   "deck": "deck_05_raw",
+   "status": "OK",
+   "slides": 2,
+   "mutations_changed": 7,
+   "mutations_no_change": 2,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 2.0
+  },
+  {
+   "deck": "deck_06_raw",
+   "status": "OK",
+   "slides": 40,
+   "mutations_changed": 173,
+   "mutations_no_change": 45,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 6.9
+  },
+  {
+   "deck": "deck_07_raw",
+   "status": "OK",
+   "slides": 11,
+   "mutations_changed": 36,
+   "mutations_no_change": 1,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 2.8
+  },
+  {
+   "deck": "deck_08_raw",
+   "status": "OK",
+   "slides": 28,
+   "mutations_changed": 146,
+   "mutations_no_change": 27,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 5.4
+  },
+  {
+   "deck": "deck_09_raw",
+   "status": "OK",
+   "slides": 9,
+   "mutations_changed": 29,
+   "mutations_no_change": 28,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 3.5
+  },
+  {
+   "deck": "deck_10_raw",
+   "status": "OK",
+   "slides": 25,
+   "mutations_changed": 58,
+   "mutations_no_change": 24,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 6.3
+  },
+  {
+   "deck": "deck_11_raw",
+   "status": "OK",
+   "slides": 26,
+   "mutations_changed": 37,
+   "mutations_no_change": 12,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 4.7
+  },
+  {
+   "deck": "deck_12_raw",
+   "status": "OK",
+   "slides": 55,
+   "mutations_changed": 168,
+   "mutations_no_change": 14,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 8.3
+  },
+  {
+   "deck": "deck_13_raw",
+   "status": "OK",
+   "slides": 4,
+   "mutations_changed": 22,
+   "mutations_no_change": 13,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 1.8
+  },
+  {
+   "deck": "deck_14_raw",
+   "status": "OK",
+   "slides": 45,
+   "mutations_changed": 150,
+   "mutations_no_change": 32,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 7.6
+  },
+  {
+   "deck": "deck_15_raw",
+   "status": "OK",
+   "slides": 26,
+   "mutations_changed": 25,
+   "mutations_no_change": 12,
+   "mutations_unsupported": 0,
+   "mutations_failed": 0,
+   "time_sec": 4.5
+  }
+ ]
+}
