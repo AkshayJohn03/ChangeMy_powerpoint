@@ -1,0 +1,54 @@
+{
+ "schema_version": "action_model_v1",
+ "derived_from": "random_forest grouped-OOF probabilities",
+ "min_class_f1_for_auto_apply": 0.15,
+ "classes": {
+  "MOVE": {
+   "auto_apply_threshold": null,
+   "reason": "max_oof_f1_below_floor",
+   "max_oof_f1_at_grid": 0.0521,
+   "argmax_f1": 0.0088,
+   "base_argmax_recall": 0.0045,
+   "policy_class": "REVIEW_ONLY"
+  },
+  "RECOLOR": {
+   "auto_apply_threshold": null,
+   "reason": "max_oof_f1_below_floor",
+   "max_oof_f1_at_grid": 0.0,
+   "argmax_f1": 0.0,
+   "base_argmax_recall": 0.0,
+   "policy_class": "REVIEW_ONLY"
+  },
+  "REMOVE": {
+   "auto_apply_threshold": 0.35,
+   "oof_f1_at_threshold": 0.6259,
+   "oof_precision_at_threshold": 0.7485,
+   "argmax_f1": 0.627,
+   "base_argmax_recall": 0.523,
+   "policy_class": "APPLY_ELIGIBLE"
+  },
+  "RESIZE": {
+   "auto_apply_threshold": 0.35,
+   "oof_f1_at_threshold": 0.578,
+   "oof_precision_at_threshold": 0.6319,
+   "argmax_f1": 0.5753,
+   "base_argmax_recall": 0.4892,
+   "policy_class": "APPLY_ELIGIBLE"
+  },
+  "RESTYLE": {
+   "auto_apply_threshold": 0.3,
+   "oof_f1_at_threshold": 0.186,
+   "oof_precision_at_threshold": 1.0,
+   "argmax_f1": 0.186,
+   "base_argmax_recall": 0.1026,
+   "policy_class": "APPLY_ELIGIBLE"
+  },
+  "UNCHANGED": {
+   "auto_apply_threshold": null,
+   "reason": "non_apply_class"
+  }
+ },
+ "non_apply_classes": [
+  "UNCHANGED"
+ ]
+}

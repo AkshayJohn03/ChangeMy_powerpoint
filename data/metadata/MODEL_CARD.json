@@ -1,0 +1,51 @@
+{
+ "artifact": "C:\\Users\\Akshay.JOHN-XAVIER\\.gemini\\antigravity-ide\\scratch\\BrandMorph\\models\\brandmorph_action_model.joblib",
+ "schema_version": "action_model_v1",
+ "created_at": "2026-08-23T08:25:35.112267+00:00",
+ "winner_model": "random_forest",
+ "trained_on_all_approved_data": true,
+ "n_rows": 7350,
+ "n_features": 49,
+ "labels": [
+  "MOVE",
+  "RECOLOR",
+  "REMOVE",
+  "RESIZE",
+  "RESTYLE",
+  "UNCHANGED"
+ ],
+ "selection_metric": "weak_class_macro_f1 (grouped OOF)",
+ "oof_evaluation": {
+  "random_forest": {
+   "macro_f1": 0.3793,
+   "weak_macro_f1": 0.3493,
+   "move_precision": 0.1429,
+   "move_recall": 0.0045,
+   "move_f1": 0.0088,
+   "per_class_f1": {
+    "MOVE": 0.0088,
+    "RECOLOR": 0.0,
+    "REMOVE": 0.627,
+    "RESIZE": 0.5753,
+    "RESTYLE": 0.186,
+    "UNCHANGED": 0.8785
+   }
+  },
+  "hist_gbdt": {
+   "macro_f1": 0.3836,
+   "weak_macro_f1": 0.345,
+   "move_precision": 0.25,
+   "move_recall": 0.059,
+   "move_f1": 0.0954,
+   "per_class_f1": {
+    "MOVE": 0.0954,
+    "RECOLOR": 0.0526,
+    "REMOVE": 0.5722,
+    "RESIZE": 0.5347,
+    "RESTYLE": 0.1778,
+    "UNCHANGED": 0.869
+   }
+  }
+ },
+ "threshold_source": "winning model's grouped-OOF probabilities"
+}
