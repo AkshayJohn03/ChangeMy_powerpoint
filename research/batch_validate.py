@@ -46,13 +46,14 @@ def main() -> None:
             pipeline = BrandMorphPipeline()
             result = pipeline.process(deck_path, out_path)
             totals = result.plan.get("totals", {})
+            by_policy = totals.get("by_policy", {})
             entry.update({
                 "slides": len(result.slides),
                 "nodes_total": totals.get("nodes_total", 0),
-                "applied": totals.get("policy_apply", 0),
-                "review": totals.get("policy_review", 0),
-                "noop": totals.get("policy_noop", 0),
-                "preserved": totals.get("policy_preserve", 0),
+                "applied": totals.get("changed", by_policy.get("APPLY", 0)),
+                "review": by_policy.get("REVIEW", 0),
+                "noop": by_policy.get("NOOP", 0),
+                "preserved": by_policy.get("PRESERVE", 0),
                 "by_action": totals.get("by_action", {}),
                 "time_sec": round(time.time() - t0, 1),
                 "output_valid": os.path.exists(out_path) and os.path.getsize(out_path) > 1000,

@@ -17,6 +17,22 @@ class PolicyEngine:
         self.schema_version = thresholds_payload.get("schema_version")
         self.classes = thresholds_payload["classes"]
         self.non_apply = set(thresholds_payload.get("non_apply_classes", ["UNCHANGED"]))
+        remove_cfg = self.classes.get("REMOVE", {}).get("safety_gates", {})
+        self.max_remove_per_slide = remove_cfg.get("max_remove_per_slide", 5)
+        self.max_remove_fraction = remove_cfg.get("max_remove_fraction", 0.30)
+
+    def apply_slide_budget(self, decisions: list[dict]) -> list[dict]:
+        """Enforce per-slide REMOVE budget. Sorts by confidence desc, keeps top N."""
+        remove_candidates = [d for d in decisions if d["action"] == "REMOVE" and d["policy"] == APPLY]
+        if len(remove_candidates) <= self.max_remove_per_slide:
+            return decisions
+        sorted_cands = sorted(remove_candidates, key=lambda d: -d["confidence"])
+        keep_set = set(id(d) for d in sorted_cands[:self.max_remove_per_slide])
+        for d in decisions:
+            if d["action"] == "REMOVE" and d["policy"] == APPLY and id(d) not in keep_set:
+                d["policy"] = REVIEW
+                d["reason"] = "slide_remove_budget_exceeded"
+        return decisions
 
     def decide(self, argmax: str, confidence: float) -> dict:
         if argmax in self.non_apply:

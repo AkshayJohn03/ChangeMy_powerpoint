@@ -1,0 +1,94 @@
+{
+ "thresholds": [
+  {
+   "threshold": 0.3,
+   "n_predictions": 546,
+   "hit_true_move": 30,
+   "hit_true_remove": 374,
+   "removed_unchanged": 104,
+   "unsafe_count": 134,
+   "max_per_deck": 322,
+   "max_slide_pct": 75.0
+  },
+  {
+   "threshold": 0.35,
+   "n_predictions": 485,
+   "hit_true_move": 15,
+   "hit_true_remove": 363,
+   "removed_unchanged": 79,
+   "unsafe_count": 94,
+   "max_per_deck": 287,
+   "max_slide_pct": 75.0
+  },
+  {
+   "threshold": 0.4,
+   "n_predictions": 418,
+   "hit_true_move": 8,
+   "hit_true_remove": 339,
+   "removed_unchanged": 53,
+   "unsafe_count": 61,
+   "max_per_deck": 249,
+   "max_slide_pct": 75.0
+  },
+  {
+   "threshold": 0.5,
+   "n_predictions": 322,
+   "hit_true_move": 5,
+   "hit_true_remove": 289,
+   "removed_unchanged": 18,
+   "unsafe_count": 23,
+   "max_per_deck": 204,
+   "max_slide_pct": 75.0
+  },
+  {
+   "threshold": 0.6,
+   "n_predictions": 263,
+   "hit_true_move": 2,
+   "hit_true_remove": 246,
+   "removed_unchanged": 8,
+   "unsafe_count": 10,
+   "max_per_deck": 181,
+   "max_slide_pct": 75.0
+  },
+  {
+   "threshold": 0.7,
+   "n_predictions": 198,
+   "hit_true_move": 2,
+   "hit_true_remove": 188,
+   "removed_unchanged": 5,
+   "unsafe_count": 7,
+   "max_per_deck": 145,
+   "max_slide_pct": 50.0
+  },
+  {
+   "threshold": 0.8,
+   "n_predictions": 127,
+   "hit_true_move": 2,
+   "hit_true_remove": 123,
+   "removed_unchanged": 2,
+   "unsafe_count": 4,
+   "max_per_deck": 103,
+   "max_slide_pct": 50.0
+  },
+  {
+   "threshold": 0.9,
+   "n_predictions": 52,
+   "hit_true_move": 1,
+   "hit_true_remove": 50,
+   "removed_unchanged": 1,
+   "unsafe_count": 2,
+   "max_per_deck": 41,
+   "max_slide_pct": 50.0
+  },
+  {
+   "threshold": 0.95,
+   "n_predictions": 32,
+   "hit_true_move": 0,
+   "hit_true_remove": 31,
+   "removed_unchanged": 1,
+   "unsafe_count": 1,
+   "max_per_deck": 22,
+   "max_slide_pct": 50.0
+  }
+ ]
+}

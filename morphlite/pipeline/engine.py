@@ -116,6 +116,7 @@ class BrandMorphPipeline:
                     shape_map[sid] = shape
 
             decisions = self.engine.decide_batch(feature_dicts)
+            decisions = self.engine.policy.apply_slide_budget(decisions)
 
             applied = changed = review = preserved = noop = no_change = failed = 0
             mutation_results = []
