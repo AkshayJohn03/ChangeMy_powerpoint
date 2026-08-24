@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BrandMorph v0.1</title>
+<title>BrandMorph v0.3</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,sans-serif;background:#030C1E;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px}
@@ -15,30 +15,38 @@ h1{color:#FFB81C;font-size:2em;margin-bottom:8px}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .spin{width:40px;height:40px;border:3px solid #FFB81C33;border-top-color:#FFB81C;border-radius:50%;animation:sp 1s linear infinite;margin:20px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
-.bar{display:flex;gap:8px;margin:16px 0}
-.pill{padding:4px 14px;border-radius:12px;font-size:13px;font-weight:bold}
-.pill.g{background:#1a4a2a;color:#4CAF50}.pill.o{background:#4a3a1a;color:#FF9800}.pill.gr{background:#2a2a3a;color:#888}
-.slide-card{border-left:3px solid #FFB81C;padding:12px 16px;margin:8px 0}
-.dec{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #0d1a3a}
-.dec:last-child{border:none}
-.badge{padding:2px 10px;border-radius:10px;font-size:11px;font-weight:bold}
-.b-apply{background:#1a4a2a;color:#4CAF50}.b-review{background:#4a3a1a;color:#FF9800}.b-noop{background:#222;color:#777}.b-pres{background:#222;color:#aaa}
+.badge{padding:3px 12px;border-radius:10px;font-size:12px;font-weight:bold;display:inline-block;margin:2px}
+.b-title{background:#4a3a1a;color:#FFB81C}
+.b-agenda{background:#1a3a4a;color:#00FFFF}
+.b-content{background:#1a2a3a;color:#8899aa}
+.b-case{background:#2a1a3a;color:#CE93D8}
+.b-thank{background:#1a4a2a;color:#4CAF50}
+.b-generic{background:#222;color:#888}
+.b-minimal{background:#1a1a2a;color:#666}
+.b-unknown{background:#333;color:#999}
+.slide-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #0d1a3a}
+.slide-row:last-child{border:none}
+.slide-num{font-weight:bold;color:#FFB81C;min-width:70px}
+.type-badge{min-width:160px;text-align:center}
 .hidden{display:none}
-.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:16px 0}
 .stat{text-align:center;padding:12px;background:#0a1a3a;border-radius:8px}
 .stat .num{font-size:28px;font-weight:bold;color:#FFB81C}
 .stat .lbl{font-size:12px;color:#8899aa}
+.integrity{padding:8px 16px;border-radius:6px;font-weight:bold;text-align:center;margin:12px 0}
+.integrity.ok{background:#1a4a2a;color:#4CAF50}
+.integrity.fail{background:#4a1a1a;color:#f66}
 </style>
 </head><body>
-<h1>BrandMorph</h1><p class="sub">AI-powered deck brandification · v0.1</p>
+<h1>BrandMorph</h1><p class="sub">Template-driven deck brandification · v0.3</p>
 
 <div id="upload" class="card">
 <div class="drop" id="dz" onclick="document.getElementById('f').click()">
 <p style="font-size:18px;margin-bottom:8px">Drop your PowerPoint here</p>
-<p style="color:#667">or click to browse</p>
+<p style="color:#667">or click to browse — it will be rebranded using the Akkodis template</p>
 <input type="file" id="f" accept=".pptx" style="display:none" onchange="handleFile(this.files[0])">
 </div><br>
-<button class="btn" id="btn" disabled onclick="process()">Analyze &amp; Transform</button>
+<button class="btn" id="btn" disabled onclick="process()">Transform Deck</button>
 </div>
 
 <div id="processing" class="card hidden">
@@ -46,10 +54,13 @@ h1{color:#FFB81C;font-size:2em;margin-bottom:8px}
 </div>
 
 <div id="results" class="card hidden">
-<h2 style="margin-bottom:16px">Analysis Complete</h2>
-<div class="summary-grid" id="sgrid"></div>
+<h2 style="margin-bottom:8px">Deck Transformed</h2>
+<p style="color:#8899aa;margin-bottom:16px" id="integrity-line"></p>
+<div class="summary-grid" id="type-grid"></div>
+<h3 style="margin:16px 0 8px;color:#8899aa;font-size:14px">SLIDE BREAKDOWN</h3>
 <div id="slides"></div>
-<br><button class="btn" onclick="location.href='/api/v01/export/'+deckId">Download Transformed PPTX</button>
+<br>
+<button class="btn" onclick="location.href='/api/v01/export/'+deckId">Download Branded PPTX</button>
 </div>
 
 <script>
@@ -61,32 +72,24 @@ dz.ondrop=e=>{e.preventDefault();dz.classList.remove('over');handleFile(e.dataTr
 function handleFile(f){if(!f||!f.name.endsWith('.pptx'))return alert('Please select a .pptx file');file=f;document.getElementById('btn').disabled=false;dz.querySelector('p').textContent=f.name+' ('+(f.size/1024/1024).toFixed(1)+' MB)'}
 async function process(){if(!file)return;show('processing');setText('Uploading deck...');
 const fd=new FormData();fd.append('file',file);
-try{setText('Running BrandMorph pipeline...');const r=await fetch('/api/v01/process',{method:'POST',body:fd});if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText)}
+try{setText('Matching slides to brand template...');const r=await fetch('/api/v01/process',{method:'POST',body:fd});if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText)}
 const d=await r.json();deckId=d.deck_id;renderResults(d)}catch(e){alert('Error: '+e.message);show('upload')}
 }
 function show(id){['upload','processing','results'].forEach(s=>document.getElementById(s).classList.toggle('hidden',s!==id))}
 function setText(t){document.getElementById('ptext').textContent=t}
+function typeBadge(t){const cls={'TITLE':'b-title','AGENDA':'b-agenda','CASE_STUDY':'b-case','THANK_YOU':'b-thank','GENERIC_CONTENT':'b-content','GENERIC_MINIMAL':'b-minimal','WHO_WE_ARE':'b-agenda','SECTION_SPLITTER':'b-case'}[t]||'b-unknown';return `<span class="badge ${cls}">${t}</span>`}
 function renderResults(d){
-const t=d.totals||{};
-const bp=t.by_policy||{};
-const mv=t.mutation_verification||{};
-const integ=d.integrity||{};
-const nDet=t.deterministic_changed||0;
-const nApply=bp.APPLY||0,nReview=bp.REVIEW||0,nPreserve=bp.PRESERVE||0,nNoop=bp.NOOP||0;
-const nChanged=mv.CHANGED||0,nNoCh=mv.NO_CHANGE||0,nUns=mv.UNSUPPORTED||0,nFail=mv.FAILED||0;
-document.getElementById('sgrid').innerHTML=`
-<div class="stat"><div class="num">${t.nodes_total||0}</div><div class="lbl">Nodes</div></div>
-<div class="stat"><div class="num">${nDet}</div><div class="lbl">Brand Applied</div></div>
-<div class="stat"><div class="num">${nChanged}</div><div class="lbl">ML Changed</div></div>
-<div class="stat"><div class="num">${nReview}</div><div class="lbl">Review</div></div>
-<div class="stat"><div class="num">${nNoop+nPreserve}</div><div class="lbl">Preserved</div></div>
-<div class="stat"><div class="num" style="color:${integ.binary_changed?'#4CAF50':'#f66'};font-size:18px">${integ.binary_changed?'VERIFIED':'UNCHANGED'}</div><div class="lbl">Integrity</div></div>`;
+const integ=d.binary_changed;
+document.getElementById('integrity-line').innerHTML=integ?
+'<div class="integrity ok">✓ Output verified — deck structurally transformed</div>':
+'<div class="integrity fail">⚠ Output may be identical to input</div>';
+const tc=d.slide_types||{};
+document.getElementById('type-grid').innerHTML=Object.entries(tc).map(([t,n])=>
+`<div class="stat"><div class="num">${n}</div><div class="lbl">${typeBadge(t)}</div></div>`).join('');
 const sc=document.getElementById('slides');sc.innerHTML='';
-(d.slides_preview||[]).forEach(s=>{
-const ch=s.changed||0,nc=s.no_change||0,rv=s.review||0,pr=s.preserved||0,tt=s.total||0;
-const card=document.createElement('div');card.className='slide-card';
-card.innerHTML=`<strong>Slide ${s.slide}</strong> <span style="color:#667">(${tt} nodes)</span><br>
-<span class="badge b-apply">${ch} changed</span> <span class="badge b-review">${rv} review</span> <span class="badge b-noop">${nc} no-change</span> <span class="badge b-noop">${pr} preserved</span>`;
-sc.appendChild(card)});
+(d.slides||[]).forEach(s=>{
+const row=document.createElement('div');row.className='slide-row';
+row.innerHTML=`<span class="slide-num">Slide ${s.slide}</span> ${typeBadge(s.type)}`;
+sc.appendChild(row)});
 show('results')}
 </script></body></html>
