@@ -1,0 +1,30 @@
+{
+ "n_samples": 422,
+ "n_decks": 30,
+ "labels": [
+  "AGENDA",
+  "CASE_STUDY",
+  "GENERIC_CONTENT",
+  "GENERIC_MINIMAL",
+  "SECTION_SPLITTER",
+  "THANK_YOU",
+  "TITLE"
+ ],
+ "class_distribution": {
+  "GENERIC_MINIMAL": 15,
+  "TITLE": 301,
+  "GENERIC_CONTENT": 54,
+  "THANK_YOU": 22,
+  "CASE_STUDY": 14,
+  "SECTION_SPLITTER": 14,
+  "AGENDA": 2
+ },
+ "models": {
+  "random_forest": 0.4982,
+  "hist_gbdt": 0.5061
+ },
+ "heuristic_baseline": 0.0,
+ "best_model": "hist_gbdt",
+ "improvement_over_heuristic": 0.5061,
+ "recommendation": "ML classifier provides meaningful improvement over heuristics"
+}

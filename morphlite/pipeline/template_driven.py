@@ -15,6 +15,7 @@ import re
 import uuid
 from pathlib import Path
 
+import numpy as np
 import pptx
 from pptx.util import Pt, Inches
 
@@ -75,11 +76,33 @@ class TemplateDrivenPipeline:
         self.profile = profile or DEFAULT_PROFILE
         self.template_prs = pptx.Presentation(template_path)
 
+        # Load ML slide type classifier
+        self._clf = None
+        clf_path = Path(__file__).resolve().parent.parent / "models" / "slide_type_classifier.joblib"
+        if clf_path.exists():
+            import joblib
+            bundle = joblib.load(clf_path)
+            self._clf = bundle["model"]
+            self._clf_features = bundle["feature_names"]
+            self._clf_labels = bundle["labels"]
+
         # Classify template slides
         self.template_types = {}
         for si, slide in enumerate(self.template_prs.slides):
             stype = classify_slide(slide)
             self.template_types[si] = stype
+
+    def _classify_with_ml(self, slide) -> str:
+        """ML classifier with heuristic fallback."""
+        if self._clf is not None:
+            try:
+                from ..training.slide_type_classifier import extract_slide_features
+                feats = np.array([extract_slide_features(slide)])
+                pred_idx = self._clf.predict(feats)[0]
+                return str(pred_idx)
+            except Exception:
+                pass
+        return classify_slide(slide)
 
     def process(self, raw_deck_path: str, output_path: str | None = None) -> dict:
         raw_prs = pptx.Presentation(raw_deck_path)
@@ -87,7 +110,7 @@ class TemplateDrivenPipeline:
 
         slide_type_map = []
         for si, slide in enumerate(raw_prs.slides):
-            stype = classify_slide(slide)
+            stype = self._classify_with_ml(slide)
             slide_type_map.append({"slide": si + 1, "type": stype})
 
         # Find best template slide for each type
