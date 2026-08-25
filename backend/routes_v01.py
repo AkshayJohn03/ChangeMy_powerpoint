@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-from morphlite.pipeline.template_driven import TemplateDrivenPipeline  # noqa: E402
+from morphlite.pipeline.template_styled import TemplateStyledPipeline  # noqa: E402
 
 router = APIRouter(prefix="/api/v01", tags=["v01"])
 
@@ -71,7 +71,7 @@ async def process_deck(file: UploadFile = File(...)):
     tmp_out = str(Path(out_dir) / f"branded{suffix}")
 
     try:
-        pipeline = TemplateDrivenPipeline(template_path)
+        pipeline = TemplateStyledPipeline(template_path)
         result = pipeline.process(tmp_in.name, tmp_out)
     except Exception as exc:
         import traceback
@@ -82,12 +82,9 @@ async def process_deck(file: UploadFile = File(...)):
             os.remove(tmp_in.name)
 
     deck_id = result["deck_id"]
-    slide_types = result.get("slide_type_map", [])
-
-    type_counts = {}
-    for st in slide_types:
-        t = st["type"]
-        type_counts[t] = type_counts.get(t, 0) + 1
+    integrity = result.get("integrity", {})
+    mutations = result.get("mutations_summary", {})
+    slide_info = result.get("slide_info", [])
 
     _sessions[deck_id] = {
         "result": result,
@@ -100,12 +97,9 @@ async def process_deck(file: UploadFile = File(...)):
         "status": "success",
         "deck_id": deck_id,
         "n_slides": result["n_slides"],
-        "binary_changed": result["binary_changed"],
-        "slide_types": type_counts,
-        "slides": [
-            {"slide": st["slide"], "type": st["type"]}
-            for st in slide_types
-        ],
+        "integrity": integrity,
+        "mutations_summary": mutations,
+        "slides": slide_info,
     }
 
 

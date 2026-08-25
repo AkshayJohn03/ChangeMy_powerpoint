@@ -79,17 +79,24 @@ function show(id){['upload','processing','results'].forEach(s=>document.getEleme
 function setText(t){document.getElementById('ptext').textContent=t}
 function typeBadge(t){const cls={'TITLE':'b-title','AGENDA':'b-agenda','CASE_STUDY':'b-case','THANK_YOU':'b-thank','GENERIC_CONTENT':'b-content','GENERIC_MINIMAL':'b-minimal','WHO_WE_ARE':'b-agenda','SECTION_SPLITTER':'b-case'}[t]||'b-unknown';return `<span class="badge ${cls}">${t}</span>`}
 function renderResults(d){
-const integ=d.binary_changed;
-document.getElementById('integrity-line').innerHTML=integ?
-'<div class="integrity ok">✓ Output verified — deck structurally transformed</div>':
+const integ=d.integrity||{};
+const mut=d.mutations_summary||{};
+const slides=d.slides||[];
+const byStage=mut.by_stage||{};
+const binaryOk=integ.binary_changed||false;
+document.getElementById('integrity-line').innerHTML=binaryOk?
+'<div class="integrity ok">✓ Output verified — '+mut.total+' mutations applied</div>':
 '<div class="integrity fail">⚠ Output may be identical to input</div>';
-const tc=d.slide_types||{};
-document.getElementById('type-grid').innerHTML=Object.entries(tc).map(([t,n])=>
-`<div class="stat"><div class="num">${n}</div><div class="lbl">${typeBadge(t)}</div></div>`).join('');
+document.getElementById('type-grid').innerHTML=`
+<div class="stat"><div class="num">${d.n_slides||0}</div><div class="lbl">Slides</div></div>
+<div class="stat"><div class="num">${byStage.TEMPLATE_BG||0}</div><div class="lbl">BG Images</div></div>
+<div class="stat"><div class="num">${byStage.TYPOGRAPHY||0}</div><div class="lbl">Typography</div></div>
+<div class="stat"><div class="num">${byStage.BRAND_FILL||0}</div><div class="lbl">Brand Fills</div></div>
+<div class="stat"><div class="num">${mut.total||0}</div><div class="lbl">Total Mutations</div></div>`;
 const sc=document.getElementById('slides');sc.innerHTML='';
-(d.slides||[]).forEach(s=>{
+slides.forEach(s=>{
 const row=document.createElement('div');row.className='slide-row';
-row.innerHTML=`<span class="slide-num">Slide ${s.slide}</span> ${typeBadge(s.type)}`;
+row.innerHTML=`<span class="slide-num">Slide ${s.slide}</span> ${typeBadge(s.type)} <span class="badge b-apply">${s.mutations} mutations</span>`;
 sc.appendChild(row)});
 show('results')}
 </script></body></html>
