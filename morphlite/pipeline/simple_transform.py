@@ -16,7 +16,7 @@ from collections import Counter
 from pathlib import Path
 
 import pptx
-from pptx.util import Pt
+from pptx.util import Pt, Inches
 from pptx.dml.color import RGBColor
 from pptx.oxml.ns import qn
 
@@ -175,6 +175,27 @@ class SimpleBrandTransform:
         body_rgb = RGBColor.from_string(assets["body_color"])
         title_font = assets["title_font"]
         body_font = assets["body_font"]
+        card_rgb = RGBColor.from_string("081632")
+        aqua_rgb = RGBColor(0, 255, 255)
+        gold_rgb = title_rgb
+
+        # Load Akkodis logo if available
+        logo_path = None
+        logo_path = None
+        try:
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            logo_dir = str(repo_root / "data" / "brand_template" / "images")
+            if os.path.isdir(logo_dir):
+                for f in os.listdir(logo_dir):
+                    if "logo" in f.lower() and f.endswith(".png"):
+                        logo_path = os.path.join(logo_dir, f)
+                        break
+        except Exception:
+            pass
+        for f in os.listdir(logo_dir):
+            if "logo" in f.lower() and f.endswith(".png"):
+                logo_path = os.path.join(logo_dir, f)
+                break
 
         mutations = []
         n_slides = len(prs.slides)
@@ -182,7 +203,7 @@ class SimpleBrandTransform:
         for si, slide in enumerate(prs.slides):
             is_first = si == 0
 
-            # 1. BACKGROUND: always set to brand dark
+            # 1. BACKGROUND
             try:
                 old_bg = None
                 try:
@@ -194,33 +215,116 @@ class SimpleBrandTransform:
                 slide.background.fill.fore_color.rgb = bg_rgb
                 mutations.append({
                     "slide": si + 1, "type": "BACKGROUND",
-                    "property": "background", "shape": "(slide)",
-                    "before": old_bg or "(inherit)", "after": str(bg_rgb),
+                    "shape": "(slide)", "before": old_bg or "(inherit)",
+                    "after": str(bg_rgb),
                 })
             except Exception:
                 pass
 
-            # 2. TEXT: normalize font and color on every text run
+            # 2. ADD LOGO to every slide (top-right corner)
+            if logo_path and os.path.exists(logo_path):
+                try:
+                    logo = slide.shapes.add_picture(
+                        logo_path, Inches(11.4), Inches(0.3), Inches(1.6), Inches(0.2)
+                    )
+                    mutations.append({
+                        "slide": si + 1, "type": "LOGO_ADDED",
+                        "shape": "(logo)", "before": "(none)", "after": "Akkodis logo",
+                    })
+                except Exception:
+                    pass
+
+            # 3. SHAPE-LEVEL STYLING (fill, border, text)
             for shape in _all_shapes(slide):
+                shape_name = shape.name or "?"
+
+                # --- LINE/CONNECTOR COLOR: gold ---
+                try:
+                    from pptx.enum.shapes import MSO_SHAPE_TYPE as MST
+                    if shape.shape_type == MST.LINE:
+                        try:
+                            old_lc = str(shape.line.color.rgb) if shape.line.color else "(none)"
+                        except Exception:
+                            old_lc = "(none)"
+                        shape.line.color.rgb = gold_rgb
+                        shape.line.width = Pt(1.5)
+                        mutations.append({
+                            "slide": si + 1, "type": "LINE_COLOR",
+                            "shape": shape_name, "before": old_lc, "after": "FFB81C",
+                        })
+                        continue
+                except Exception:
+                    pass
+
+                # --- SHAPE FILL: fix light fills that make text invisible ---
+                has_text = shape.has_text_frame and shape.text_frame.text.strip()
+                old_fill = None
+                fill_is_light = False
+
+                try:
+                    if shape.fill.type == 1:
+                        old_fill = str(shape.fill.fore_color.rgb)
+                        fill_lum = _luminance(shape.fill.fore_color.rgb)
+                        fill_is_light = fill_lum > 0.5
+                except Exception:
+                    pass
+
+                # If shape has a light fill and we're setting text to white,
+                # change the fill to brand card color for contrast
+                if has_text and fill_is_light:
+                    try:
+                        shape.fill.fore_color.rgb = card_rgb
+                        mutations.append({
+                            "slide": si + 1, "type": "FILL_CONTRAST_FIX",
+                            "shape": shape_name,
+                            "before": old_fill, "after": "081632",
+                        })
+                        fill_is_light = False  # now dark
+                    except Exception:
+                        pass
+
+                # Also apply fill to AUTO_SHAPEs without text (card styling)
+                if not has_text:
+                    try:
+                        st = str(shape.shape_type)
+                        if "AUTO_SHAPE" in st or "FREEFORM" in st:
+                            if shape.fill.type == 1 and fill_is_light:
+                                shape.fill.fore_color.rgb = card_rgb
+                                mutations.append({
+                                    "slide": si + 1, "type": "FILL_NORMALIZE",
+                                    "shape": shape_name,
+                                    "before": old_fill, "after": "081632",
+                                })
+                    except Exception:
+                        pass
+
+                # --- TEXT: font + color with contrast against effective bg ---
                 if not shape.has_text_frame:
                     continue
                 text = shape.text_frame.text.strip()
                 if not text:
                     continue
 
-                # Skip guidance text
                 lower = text.lower()
                 if "font guidance" in lower or "do not change" in lower or "do not move" in lower:
                     continue
 
                 is_title = _is_title_like(shape)
                 target_font = title_font if is_title else body_font
+
+                # Text color: contrast against the shape's fill if it has one,
+                # otherwise against the slide background
+                effective_bg = card_rgb if (old_fill and not fill_is_light) else bg_rgb
                 target_color = title_rgb if is_title else body_rgb
 
-                # Contrast check against brand background
-                cr = _contrast_ratio(target_color, bg_rgb)
+                cr = _contrast_ratio(target_color, effective_bg)
                 if cr < 2.0:
-                    target_color = body_rgb
+                    # If white text won't be visible on light fill, use dark text
+                    if fill_is_light or (old_fill and _luminance(RGBColor.from_string(old_fill.lstrip("#"))) > 0.5):
+                        target_color = RGBColor(0x0F, 0x17, 0x2A)  # dark text on light bg
+                    else:
+                        target_color = body_rgb  # fallback white
+                    cr = _contrast_ratio(target_color, effective_bg)
 
                 for p in shape.text_frame.paragraphs:
                     try:
@@ -250,13 +354,13 @@ class SimpleBrandTransform:
                         if old_font != target_font:
                             mutations.append({
                                 "slide": si + 1, "type": "FONT_NAME",
-                                "shape": shape.name, "before": old_font or "(inh)",
+                                "shape": shape_name, "before": old_font or "(inh)",
                                 "after": target_font,
                             })
                         if old_color != str(target_color):
                             mutations.append({
                                 "slide": si + 1, "type": "FONT_COLOR",
-                                "shape": shape.name, "before": old_color,
+                                "shape": shape_name, "before": old_color,
                                 "after": str(target_color),
                             })
 
