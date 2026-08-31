@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "stitch": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://stitch.googleapis.com/mcp", "--header", "X-Goog-Api-Key: ${STITCH_API_KEY}"],
+      "description": "Google Stitch — generates Figma-faithful UI variants from prompts + Figma context. Used to benchmark 3 layout alternatives per slide in BrandMorph.",
+      "proof": "brandmorph-studio/src/mcp/stitch-proof.json"
+    },
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "figma-developer-mcp", "--figma-api-key=${FIGMA_API_KEY}", "--stdio"],
+      "description": "Figma Developer MCP — extracts variables, auto-layout, Code Connect metadata. BrandMorph uses it to parse figma_full_file.json → tokens.",
+      "proof": "brandmorph-studio/.figma/make/site.json"
+    },
+    "vercel": {
+      "command": "npx",
+      "args": ["-y", "@vercel/mcp", "--tools=deploy,env,logs"],
+      "description": "Vercel MCP — deploy, env management, and log streaming for BrandMorph Studio. Production deploys on push to main.",
+      "proof": "brandmorph-studio/vercel.json"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "description": "GitHub MCP — PR diff inspection, commit history. Proves design→code velocity.",
+      "proof": "https://github.com/AkshayJohn03/Portfolio_Creative_Technologist-"
+    }
+  },
+  "_meta": {
+    "author": "Akshay John Xavier — 8y Creative Technologist",
+    "lastVerified": "2026-08-31",
+    "usage": "Cursor / Claude Code / Claude Desktop: copy this file to .cursor/mcp.json or claude_desktop_config.json. Requires: STITCH_API_KEY (Google AI Studio), FIGMA_API_KEY (Figma personal token), VERCEL_TOKEN (vercel.com/account/tokens)"
+  }
+}
