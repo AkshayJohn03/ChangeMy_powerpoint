@@ -1,0 +1,67 @@
+[
+  {
+    "name": "ThriftHaven Primitives",
+    "modes": [
+      {
+        "name": "Value",
+        "variables": [
+          {
+            "name": "primary-blue-900",
+            "type": "COLOR",
+            "value": "#0A253D"
+          },
+          {
+            "name": "primary-blue-500",
+            "type": "COLOR",
+            "value": "#2B74B6"
+          },
+          {
+            "name": "primary-blue-200",
+            "type": "COLOR",
+            "value": "#DCEAF6"
+          },
+          {
+            "name": "primary-blue-600",
+            "type": "COLOR",
+            "value": "#0F78B0"
+          },
+          {
+            "name": "sage-olive-500",
+            "type": "COLOR",
+            "value": "#6C7A68"
+          },
+          {
+            "name": "sage-olive-800",
+            "type": "COLOR",
+            "value": "#383F36"
+          },
+          {
+            "name": "warm-gold-500",
+            "type": "COLOR",
+            "value": "#FF9900"
+          },
+          {
+            "name": "cyan-uplink-500",
+            "type": "COLOR",
+            "value": "#029FA0"
+          },
+          {
+            "name": "emerald-500",
+            "type": "COLOR",
+            "value": "#10B981"
+          },
+          {
+            "name": "rose-500",
+            "type": "COLOR",
+            "value": "#EF4444"
+          },
+          {
+            "name": "amber-500",
+            "type": "COLOR",
+            "value": "#F59E0B"
+          }
+        ]
+      }
+    ]
+  }
+]
