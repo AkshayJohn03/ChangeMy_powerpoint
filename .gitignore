@@ -18,3 +18,7 @@ backend/Akkodis_Guidelines.pptx
 *.tmp
 .DS_Store
 rustup-init.exe
+
+brandmorph-studio/node_modules/
+brandmorph-studio/dist/
+
