@@ -3,3 +3,9 @@ uvicorn
 python-pptx
 python-multipart
 pydantic
+httpx
+lxml
+pillow
+# optional LLM providers (uncomment when using Azure/OpenAI):
+# openai
+# azure-identity

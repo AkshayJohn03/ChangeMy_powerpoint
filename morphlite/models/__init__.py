@@ -1,0 +1,1 @@
+"""Model-readable content layer: raw decks -> structured content intermediate."""

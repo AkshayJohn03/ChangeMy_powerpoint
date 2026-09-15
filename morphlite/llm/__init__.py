@@ -1,0 +1,1 @@
+"""LLM integration layer: provider abstraction + spec builder."""

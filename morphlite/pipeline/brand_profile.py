@@ -22,8 +22,8 @@ class BrandProfile:
 
     gold_hex: str = "FFB81C"
     white_hex: str = "FFFFFF"
-    dark_hex: str = "030C1E"
-    card_hex: str = "081632"
+    dark_hex: str = "001F33"
+    card_hex: str = "0A2A4A"
 
     resize_map: dict = field(default_factory=lambda: {
         12.0: 10.0, 14.0: 12.0, 16.0: 12.0, 16.7: 12.0,

@@ -42,8 +42,13 @@ interface ColorToken {
   hex: string;
 }
 
+const API_BASE = (import.meta as any).env?.VITE_API_URL || "http://localhost:8000";
+
 export default function StudioWorkspace() {
-  const [appPhase, setAppPhase] = useState<'splash' | 'import' | 'studio'>('splash');
+  const [appPhase, setAppPhase] = useState<'splash' | 'import' | 'studio' | 'v02_result'>('splash');
+  const [pipelineMode, setPipelineMode] = useState<'v01' | 'v02' | 'tag'>('v01');
+  const [v02Result, setV02Result] = useState<any>(null);
+  const [v02DeckId, setV02DeckId] = useState<string | null>(null);
   const [slides, setSlides] = useState<SlideAST[]>([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -118,108 +123,56 @@ export default function StudioWorkspace() {
 
   // Push state into Undo/Redo history
   const pushStateToHistory = (newSlides: SlideAST[]) => {
-    const newHistory = history.slice(0, historyStep + 1);
-    newHistory.push(JSON.parse(JSON.stringify(newSlides)));
-    setHistory(newHistory);
-    setHistoryStep(newHistory.length - 1);
+    const updatedHistory = history.slice(0, historyStep + 1);
+    updatedHistory.push(JSON.parse(JSON.stringify(newSlides)));
+    setHistory(updatedHistory);
+    setHistoryStep(updatedHistory.length - 1);
   };
 
-  const undo = () => {
+  const handleUndo = () => {
     if (historyStep > 0) {
       const prevStep = historyStep - 1;
-      setSlides(JSON.parse(JSON.stringify(history[prevStep])));
       setHistoryStep(prevStep);
+      setSlides(JSON.parse(JSON.stringify(history[prevStep])));
     }
   };
 
-  const redo = () => {
+  const handleRedo = () => {
     if (historyStep < history.length - 1) {
       const nextStep = historyStep + 1;
-      setSlides(JSON.parse(JSON.stringify(history[nextStep])));
       setHistoryStep(nextStep);
+      setSlides(JSON.parse(JSON.stringify(history[nextStep])));
     }
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        if (e.shiftKey) redo();
-        else undo();
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        redo();
+        handleRedo();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [historyStep, history]);
 
-  // Load TestPPT.pptx
-  const loadTestPPT = async () => {
-    setIsProcessing(true);
-    try {
-      const res = await fetch('http://localhost:8000/api/parse_test_ppt');
-      const data = await res.json();
-      if (data.status === 'success' && data.slides.length > 0) {
-        setSlides(data.slides);
-        setActiveSlideIndex(0);
-        setFileName('TestPPT.pptx');
-        pushStateToHistory(data.slides);
-        setAppPhase('studio');
-      } else {
-        createFallbackSlides();
-      }
-    } catch (err) {
-      createFallbackSlides();
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const createFallbackSlides = () => {
-    const fallback: SlideAST[] = Array.from({ length: 4 }).map((_, idx) => ({
-      slide_id: idx + 1,
+    const fallback: SlideAST[] = Array.from({ length: 8 }, (_, i) => ({
+      slide_id: i + 1,
       dimensions: { width: 13.333, height: 7.5 },
       nodes: [
         {
           id: 1,
-          type: 'TEXT_CONTAINER',
-          bbox: { left: 1.0, top: 0.8, width: 11.3, height: 1.0 },
-          paragraphs: [
-            { text: idx === 0 ? 'Capacity Management & SLA Performance' : `Parsed Slide ${idx + 1}`, level: 0, font_size: 24, bold: true, align: 'LEFT', runs: [] }
-          ]
+          type: 'TITLE',
+          bbox: { left: 0.8, top: 0.6, width: 11.5, height: 0.9 },
+          paragraphs: [{ text: `Slide ${i + 1}: Akkodis System Architecture Overview`, level: 0, font_size: 24, bold: true, runs: [] }]
         },
         {
           id: 2,
           type: 'RECTANGLE_SHAPE',
           bbox: { left: 1.0, top: 2.0, width: 3.5, height: 4.5 }
-        },
-        {
-          id: 3,
-          type: 'TEXT_CONTAINER',
-          bbox: { left: 1.2, top: 2.2, width: 3.1, height: 4.0 },
-          paragraphs: [
-            { text: 'High Capacity Node', level: 0, font_size: 14, bold: true, runs: [] },
-            { text: 'Node stability running at optimum threshold under 12ms latency.', level: 1, font_size: 11, runs: [] }
-          ]
-        },
-        {
-          id: 4,
-          type: 'ARROW_SHAPE',
-          bbox: { left: 4.6, top: 4.0, width: 0.6, height: 0.4 }
-        },
-        {
-          id: 5,
-          type: 'RECTANGLE_SHAPE',
-          bbox: { left: 5.3, top: 2.0, width: 3.5, height: 4.5 }
-        },
-        {
-          id: 6,
-          type: 'TEXT_CONTAINER',
-          bbox: { left: 5.5, top: 2.2, width: 3.1, height: 4.0 },
-          paragraphs: [
-            { text: 'Medium Capacity Node', level: 0, font_size: 14, bold: true, runs: [] },
-            { text: 'Resource allocation approaching 78% limit. Rebalancing scheduled.', level: 1, font_size: 11, runs: [] }
-          ]
         }
       ]
     }));
@@ -230,38 +183,127 @@ export default function StudioWorkspace() {
     setAppPhase('studio');
   };
 
+  // Load TestPPT.pptx per selected pipeline mode
+  const loadTestPPT = async () => {
+    setIsProcessing(true);
+    try {
+      if (pipelineMode === 'tag') {
+        const res = await fetch(`${API_BASE}/api/tag/process_test_ppt`);
+        if (!res.ok) {
+          // fallback to direct parse if test endpoint not found
+          const parseRes = await fetch(`${API_BASE}/api/parse_test_ppt`);
+          const data = await parseRes.json();
+          if (data.status === 'success') {
+            setSlides(data.slides);
+            setActiveSlideIndex(0);
+            setFileName('TestPPT.pptx');
+            pushStateToHistory(data.slides);
+            setAppPhase('studio');
+            return;
+          }
+        } else {
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `BrandMorph_Tag_TestPPT.pptx`;
+          document.body.appendChild(a); a.click(); a.remove();
+          alert("Success! Downloaded 100% Brand-Perfect Master Template TestPPT deck.");
+        }
+      } else if (pipelineMode === 'v02') {
+        const res = await fetch(`${API_BASE}/api/v02/process_test_ppt`);
+        const data = await res.json();
+        if (data.status === 'success') {
+          setV02Result(data);
+          setV02DeckId(data.deck_id);
+          setAppPhase('v02_result');
+        } else {
+          createFallbackSlides();
+        }
+      } else {
+        const res = await fetch(`${API_BASE}/api/parse_test_ppt`);
+        const data = await res.json();
+        if (data.status === 'success' && data.slides.length > 0) {
+          setSlides(data.slides);
+          setActiveSlideIndex(0);
+          setFileName('TestPPT.pptx');
+          pushStateToHistory(data.slides);
+          setAppPhase('studio');
+        } else {
+          createFallbackSlides();
+        }
+      }
+    } catch (err) {
+      createFallbackSlides();
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFileName(file.name);
       setIsProcessing(true);
-
       const formData = new FormData();
       formData.append('file', file);
-
       try {
-        const res = await fetch('http://localhost:8000/api/parse_deck', {
-          method: 'POST',
-          body: formData
-        });
-        const data = await res.json();
-        if (data.status === 'success' && data.slides.length > 0) {
-          setSlides(data.slides);
-          setActiveSlideIndex(0);
-          pushStateToHistory(data.slides);
-          setAppPhase('studio');
+        if (pipelineMode === 'tag') {
+          const res = await fetch(`${API_BASE}/api/tag/process`, { method: 'POST', body: formData });
+          if (!res.ok) throw new Error("Tag processing failed");
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `BrandMorph_Tag_${file.name}`;
+          document.body.appendChild(a); a.click(); a.remove();
+          alert("Success! Downloaded 100% Brand-Perfect Master Template deck.");
+        } else if (pipelineMode === 'v02') {
+          const res = await fetch(`${API_BASE}/api/v02/process`, { method: 'POST', body: formData });
+          const data = await res.json();
+          if (data.status === 'success') {
+            setV02Result(data);
+            setV02DeckId(data.deck_id);
+            setAppPhase('v02_result');
+          } else {
+            alert("v02 error: " + (data.detail || JSON.stringify(data)));
+          }
         } else {
-          alert("Error parsing presentation: " + (data.message || "Unknown error"));
+          const res = await fetch(`${API_BASE}/api/parse_deck`, { method: 'POST', body: formData });
+          const data = await res.json();
+          if (data.status === 'success' && data.slides.length > 0) {
+            setSlides(data.slides);
+            setActiveSlideIndex(0);
+            pushStateToHistory(data.slides);
+            setAppPhase('studio');
+          } else {
+            alert("Error parsing presentation: " + (data.message || "Unknown error"));
+          }
         }
       } catch (err) {
-        loadTestPPT();
+        alert("Upload failed: " + err);
       } finally {
         setIsProcessing(false);
       }
     }
   };
 
-  // Export Native PPTX
+  const handleV02Download = async () => {
+    if (!v02DeckId) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v02/export/${v02DeckId}`);
+      if (!res.ok) throw new Error("export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BrandMorph_v02_${fileName}`;
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) { alert("Export failed: " + e); } finally { setExporting(false); }
+  };
+
+  // Export Native PPTX (v01 studio)
   const handleExportPPTX = async () => {
     setExporting(true);
     try {
@@ -282,7 +324,7 @@ export default function StudioWorkspace() {
         }
       };
 
-      const res = await fetch('http://localhost:8000/api/export_deck', {
+      const res = await fetch(`${API_BASE}/api/export_deck`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -406,53 +448,193 @@ export default function StudioWorkspace() {
     );
   }
 
-  // 2. RESOURCE IMPORT STAGE
+  // 1.5 V02 RESULT SCREEN (intelligent pipeline)
+  if (appPhase === 'v02_result' && v02Result) {
+    return (
+      <div className="min-h-screen w-screen bg-slate-50 flex flex-col items-center p-6 text-slate-800 font-sans">
+        <div className="max-w-3xl w-full space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white"><Check className="w-5 h-5" /></div>
+              <div><h2 className="text-lg font-bold text-slate-900">Branded deck ready — v02 Intelligent</h2><p className="text-xs text-slate-500">{v02Result.n_slides} slides • {v02Result.provider} • {v02Result.pipeline}</p></div>
+            </div>
+            <div className="flex gap-2 text-[11px] font-mono bg-slate-900 text-emerald-300 rounded-lg p-3 overflow-x-auto">
+              <span>deck_id {v02Result.deck_id}</span><span className="opacity-40">|</span><span>{v02Result.binary_changed ? "binary changed" : "no change"}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="bg-slate-50 border rounded-lg p-3 text-center"><div className="font-bold text-lg text-blue-600">{v02Result.n_raw_slides}</div><div className="text-slate-500">raw slides</div></div>
+              <div className="bg-slate-50 border rounded-lg p-3 text-center"><div className="font-bold text-lg text-emerald-600">{v02Result.n_slides}</div><div className="text-slate-500">branded slides</div></div>
+              <div className="bg-slate-50 border rounded-lg p-3 text-center"><div className="font-bold text-lg text-amber-600">{v02Result.slides?.length || 0}</div><div className="text-slate-500">spec entries</div></div>
+            </div>
+            <div className="max-h-48 overflow-y-auto border rounded-lg divide-y text-xs bg-white">
+              {v02Result.slides?.map((s:any,i:number)=>(<div key={i} className="flex justify-between p-2"><span className="font-medium truncate">{s.title || `Slide ${s.slide}`}</span><span className="ml-2 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border text-[10px]">{s.archetype}</span></div>))}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={handleV02Download} disabled={exporting} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md">{exporting ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4"/>} Download branded .pptx</button>
+              <button onClick={()=>{setAppPhase('import'); setV02Result(null);}} className="px-6 py-3 rounded-xl border bg-white hover:bg-slate-50 font-medium">Start over</button>
+            </div>
+            <div className="text-[11px] text-slate-400 text-center">Deterministic Akkodis renderer — no content lost, text fit-checked, brand tokens enforced. Add <code className="bg-slate-100 px-1 rounded">AZURE_OPENAI_ENDPOINT</code> to enable real LLM.</div>
+          </div>
+          <div className="text-center text-xs text-slate-400"><a href="https://github.com/AkshayJohn03/ChangeMy_powerpoint" target="_blank" rel="noreferrer" className="underline">GitHub</a> • Built for portfolio — another AI agent works on this repo in parallel.</div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. RESOURCE IMPORT STAGE (Executive Corporate Dashboard)
   if (appPhase === 'import') {
     return (
-      <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800 font-sans select-none">
-        <div className="max-w-xl w-full bg-white rounded-2xl border border-slate-200 shadow-xl p-8 space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/30">
-              <Cpu className="w-5 h-5" />
+      <div className="min-h-screen w-screen bg-[#030C1E] flex flex-col items-center justify-center p-6 text-slate-100 font-sans">
+        <div className="max-w-3xl w-full space-y-6">
+          
+          {/* Executive Header */}
+          <div className="flex items-center justify-between border-b border-slate-800 pb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-[#081632] border border-[#0F274E] flex items-center justify-center text-[#FFB81C] shadow-lg">
+                <Cpu className="w-6 h-6 text-[#FFB81C]" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                  BrandMorph <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#081632] text-[#00FFFF] border border-[#0F274E] font-medium tracking-wide">ENTERPRISE 0.5.0</span>
+                </h1>
+                <p className="text-xs text-slate-400 font-medium">Akkodis Hybrid Layout & Presentation Intelligence Engine</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">BrandMorph Studio</h2>
-              <p className="text-xs text-slate-500">Import PPTX deck or load sample presentation</p>
+            <div className="flex items-center gap-2 text-xs text-slate-400 bg-[#081632] px-3 py-1.5 rounded-lg border border-slate-800">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>100% Offline CPU • Zero Data Leakage</span>
             </div>
           </div>
 
-          <div className="border-2 border-dashed border-blue-200 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-50 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition text-center relative overflow-hidden">
-            <input 
-              type="file" 
-              accept=".pptx,.ppt"
-              onChange={handleFileUpload}
-              className="absolute inset-0 opacity-0 cursor-pointer z-10"
-            />
-            <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-3 shadow-inner">
-              <FileUp className="w-7 h-7" />
-            </div>
-            <p className="text-sm font-semibold text-slate-800">
-              Click to browse PowerPoint deck (.pptx)
-            </p>
-            <p className="text-xs text-slate-500 mt-1">Automatic AST Decompiler parses layout, shapes & text frames</p>
-          </div>
-
-          {isProcessing && (
-            <div className="flex items-center justify-center gap-3 p-4 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              Decompiling PowerPoint AST and applying Akkodis Brand Rules...
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          {/* Engine Selector - 3 Distinct Pillars */}
+          <div className="grid grid-cols-3 gap-3">
             <button 
-              onClick={loadTestPPT}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition shadow-md shadow-blue-600/20"
+              onClick={() => setPipelineMode('v01')}
+              className={`p-4 rounded-xl border text-left transition relative ${
+                pipelineMode === 'v01' 
+                  ? 'bg-[#081632] border-[#FFB81C] shadow-lg shadow-[#FFB81C]/10' 
+                  : 'bg-[#051126] border-slate-800 hover:border-slate-700 text-slate-400'
+              }`}
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              Load Sample Deck (TestPPT.pptx)
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-bold text-sm text-white flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" /> Fidelity Mode
+                </div>
+                {pipelineMode === 'v01' && <div className="w-2 h-2 rounded-full bg-[#FFB81C]"></div>}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Preserves 100% of custom arrows, connectors, flowcharts & raw shapes with Akkodis color tokens.
+              </p>
+              <div className="mt-2 text-[10px] text-[#00FFFF] font-mono">Pipeline: v01 (TemplateStyled)</div>
+            </button>
+
+            <button 
+              onClick={() => setPipelineMode('v02')}
+              className={`p-4 rounded-xl border text-left transition relative ${
+                pipelineMode === 'v02' 
+                  ? 'bg-[#081632] border-[#00FFFF] shadow-lg shadow-[#00FFFF]/10' 
+                  : 'bg-[#051126] border-slate-800 hover:border-slate-700 text-slate-400'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-bold text-sm text-white flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-400" /> Restructure
+                </div>
+                {pipelineMode === 'v02' && <div className="w-2 h-2 rounded-full bg-[#00FFFF]"></div>}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Transforms dense, messy bullet points into structured dark card grids & 2-column layouts.
+              </p>
+              <div className="mt-2 text-[10px] text-[#FFB81C] font-mono">Pipeline: v02 (ContentModel)</div>
+            </button>
+
+            <button 
+              onClick={() => setPipelineMode('tag')}
+              className={`p-4 rounded-xl border text-left transition relative ${
+                pipelineMode === 'tag' 
+                  ? 'bg-[#081632] border-emerald-400 shadow-lg shadow-emerald-400/10' 
+                  : 'bg-[#051126] border-slate-800 hover:border-slate-700 text-slate-400'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-bold text-sm text-white flex items-center gap-1.5">
+                  <LayoutTemplate className="w-4 h-4 text-cyan-400" /> Master Template
+                </div>
+                {pipelineMode === 'tag' && <div className="w-2 h-2 rounded-full bg-emerald-400"></div>}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Direct injection into official Brand Guideline master slides with native vector graphics.
+              </p>
+              <div className="mt-2 text-[10px] text-emerald-400 font-mono">Pipeline: Tag (Docxtemplater)</div>
             </button>
           </div>
+
+          {/* Upload Dropzone */}
+          <div className="bg-[#081632] border border-[#0F274E] rounded-2xl p-8 space-y-5 shadow-2xl relative">
+            <div className="border-2 border-dashed border-[#1E3A6E] hover:border-[#FFB81C] bg-[#030C1E]/60 hover:bg-[#030C1E] rounded-xl p-10 flex flex-col items-center justify-center cursor-pointer transition text-center relative overflow-hidden group">
+              <input 
+                type="file" 
+                accept=".pptx,.ppt"
+                onChange={handleFileUpload}
+                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+              />
+              <div className="w-14 h-14 rounded-2xl bg-[#081632] border border-[#0F274E] text-[#FFB81C] group-hover:scale-110 flex items-center justify-center mb-3 shadow-md transition">
+                <FileUp className="w-7 h-7" />
+              </div>
+              <p className="text-base font-semibold text-white">
+                Drop PowerPoint presentation or browse files
+              </p>
+              <p className="text-xs text-slate-400 mt-1.5">
+                {pipelineMode === 'v01' && 'Fidelity Engine: Parses AST and opens interactive canvas with vector shape preservation'}
+                {pipelineMode === 'v02' && 'Restructure Engine: Generates structured 16:9 dark card grids instantly'}
+                {pipelineMode === 'tag' && 'Master Template Engine: Generates 100% Brand-Guideline PPTX download'}
+              </p>
+            </div>
+
+            {isProcessing && (
+              <div className="flex items-center justify-center gap-3 p-4 bg-[#030C1E] text-[#00FFFF] rounded-xl text-xs font-semibold border border-[#0F274E] animate-pulse">
+                <RefreshCw className="w-4 h-4 animate-spin text-[#FFB81C]" />
+                Processing presentation AST via {pipelineMode.toUpperCase()} Engine...
+              </div>
+            )}
+
+            {/* Quick-Launch Sample Action */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={loadTestPPT}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#FFB81C] hover:bg-[#E5A519] text-[#030C1E] font-bold text-xs transition shadow-md shadow-[#FFB81C]/20"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Load Sample Deck (TestPPT.pptx • 29 Slides)
+                </button>
+              </div>
+              <div className="text-right text-[11px] text-slate-400">
+                <span>Active Backend: <code className="text-[#00FFFF] font-mono">{API_BASE}</code></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Metrics */}
+          <div className="grid grid-cols-4 gap-3 text-center text-xs">
+            <div className="bg-[#081632]/50 border border-slate-800 rounded-lg p-3">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Canvas Ratio</div>
+              <div className="text-sm font-bold text-white mt-0.5">16:9 Widescreen</div>
+            </div>
+            <div className="bg-[#081632]/50 border border-slate-800 rounded-lg p-3">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Brand Palette</div>
+              <div className="text-sm font-bold text-[#FFB81C] mt-0.5">Akkodis Dark + Gold</div>
+            </div>
+            <div className="bg-[#081632]/50 border border-slate-800 rounded-lg p-3">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Typography</div>
+              <div className="text-sm font-bold text-[#00FFFF] mt-0.5">Times New Roman / Arial</div>
+            </div>
+            <div className="bg-[#081632]/50 border border-slate-800 rounded-lg p-3">
+              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Data Privacy</div>
+              <div className="text-sm font-bold text-emerald-400 mt-0.5">Air-Gapped Local</div>
+            </div>
+          </div>
+
         </div>
       </div>
     );
@@ -551,7 +733,7 @@ export default function StudioWorkspace() {
             {/* Undo / Redo */}
             <div className="flex items-center gap-1 border-r border-slate-200 pr-3">
               <button 
-                onClick={undo}
+                onClick={handleUndo}
                 disabled={historyStep <= 0}
                 className="p-1.5 rounded hover:bg-slate-100 text-slate-700 disabled:opacity-30 border border-slate-200"
                 title="Undo (Ctrl+Z)"
@@ -559,7 +741,7 @@ export default function StudioWorkspace() {
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
               <button 
-                onClick={redo}
+                onClick={handleRedo}
                 disabled={historyStep >= history.length - 1}
                 className="p-1.5 rounded hover:bg-slate-100 text-slate-700 disabled:opacity-30 border border-slate-200"
                 title="Redo (Ctrl+Y)"

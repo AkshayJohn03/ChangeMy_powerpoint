@@ -1,0 +1,1 @@
+"""Typed slide-spec schema + JSON (de)serialization."""

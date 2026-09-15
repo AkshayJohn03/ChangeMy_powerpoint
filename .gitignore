@@ -4,3 +4,19 @@ session-ses_*.md
 *.joblib
 __pycache__/
 *.pyc
+
+# --- Deck-bearing binaries, local outputs, secrets, toolchains ---
+*.pptx
+*.ppt
+*.log
+build/
+dist/
+*.exe
+*.msi
+venv/
+.venv/
+node_modules/
+.env
+.env.local
+ui/dist/
+models/*.joblib

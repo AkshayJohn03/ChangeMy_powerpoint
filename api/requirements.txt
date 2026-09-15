@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-pptx
+python-multipart
+pydantic
+httpx
+lxml
+pillow

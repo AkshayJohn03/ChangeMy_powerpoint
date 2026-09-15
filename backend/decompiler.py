@@ -98,7 +98,7 @@ class SlideDecompiler:
         # 3. Raw Auto-Shapes / Geometric Shapes / Arrows
         elif shape.shape_type in (MSO_SHAPE_TYPE.AUTO_SHAPE, MSO_SHAPE_TYPE.FREEFORM):
             shape_enum_str = str(shape.auto_shape_type) if hasattr(shape, 'auto_shape_type') else "RECTANGLE"
-            
+
             # Map Shape Type Enums
             if "ARROW" in shape_enum_str or "CHEVRON" in shape_enum_str:
                 base_data["type"] = "ARROW_SHAPE"
@@ -110,10 +110,31 @@ class SlideDecompiler:
             base_data["shape_name"] = shape_enum_str
             return base_data
 
-        # 4. Lines and Connectors
-        elif shape.shape_type in (MSO_SHAPE_TYPE.LINE, MSO_SHAPE_TYPE.CONNECTOR):
+        # 4. Lines and Connectors — python-pptx reports connectors as LINE (9) with tag cxnSp
+        elif shape.shape_type == MSO_SHAPE_TYPE.LINE:
+            try:
+                is_connector = shape._element.tag.endswith("}cxnSp")
+            except Exception:
+                is_connector = False
+            base_data["type"] = "LINE_SHAPE"
+            base_data["shape_name"] = "CONNECTOR_LINE" if is_connector else "LINE"
+            return base_data
+        # Legacy guard: if CONNECTOR enum ever exists, handle it without AttributeError
+        elif hasattr(MSO_SHAPE_TYPE, "CONNECTOR") and shape.shape_type == getattr(MSO_SHAPE_TYPE, "CONNECTOR"):
             base_data["type"] = "LINE_SHAPE"
             base_data["shape_name"] = "CONNECTOR_LINE"
             return base_data
-
-        return None
+        # 5. Text boxes / placeholders already handled via has_text_frame above
+        elif shape.shape_type in (MSO_SHAPE_TYPE.TEXT_BOX, MSO_SHAPE_TYPE.PLACEHOLDER):
+            return None
+        # 6. Fallback — never throw "Connector" error; return generic unknown
+        else:
+            # Check XML tag for connector fallback (covers cxnSp even if shape_type is MIXED)
+            try:
+                if shape._element.tag.endswith("}cxnSp"):
+                    base_data["type"] = "LINE_SHAPE"
+                    base_data["shape_name"] = "CONNECTOR_LINE"
+                    return base_data
+            except Exception:
+                pass
+            return None
