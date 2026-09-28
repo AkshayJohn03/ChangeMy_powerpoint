@@ -27,6 +27,7 @@ from lxml import etree
 from ..brand.profile import BrandDNA
 from ..report import ChangeEntry, MorphReport
 from .colorutil import shade
+from .safety import safe_fromstring
 
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _NS = {"a": _A}
@@ -69,7 +70,7 @@ def transform_theme_bytes(
     theme_name: str,
     report: MorphReport | None = None,
 ) -> bytes:
-    root = etree.fromstring(xml_bytes)
+    root = safe_fromstring(xml_bytes)
 
     scheme = root.find(".//a:clrScheme", _NS)
     if scheme is not None:

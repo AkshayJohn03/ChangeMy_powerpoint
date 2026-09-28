@@ -14,6 +14,11 @@ from brandmorph import __version__ as brandmorph_version
 from brandmorph.brand.profile import BrandDNA
 from brandmorph.engine.analyzer import analyze as deck_inventory
 from brandmorph.engine.pipeline import MorphOptions, MorphPipeline
+from brandmorph.engine.safety import (
+    UnsafeDeckError,
+    save_upload_bounded,
+    validate_deck,
+)
 from brandmorph.llm import env_client as llm_from_env
 from builder import BrandTokens, NativePPTXBuilder
 from decompiler import SlideDecompiler
@@ -44,8 +49,9 @@ def hex_to_rgb(hex_str: str) -> RGBColor:
     return RGBColor(37, 99, 235)
 
 def _save_upload(upload: UploadFile, suffix: str) -> str:
+    """Stream upload to disk under a hard size cap (SECURITY.md: DoS defense)."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        shutil.copyfileobj(upload.file, tmp)
+        save_upload_bounded(upload, tmp.name)
         return tmp.name
 
 @app.post("/api/parse_deck")
@@ -171,12 +177,58 @@ async def api_brand_apply(
         }
     except HTTPException:
         raise
+    except UnsafeDeckError as e:
+        raise HTTPException(status_code=422, detail=f"unsafe deck rejected: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         for p in (src, out_tmp.name):
             if os.path.exists(p):
                 os.remove(p)
+
+
+@app.post("/api/brand/apply_batch")
+async def api_brand_apply_batch(
+    files: list[UploadFile] = File(...),
+    brand: str = Form("akkodis"),
+    dry_run: bool = Form(False),
+):
+    """Batch re-branding: each deck is isolated — one hostile/corrupt deck is
+    rejected (HTTP 422 semantics per item) without failing the batch."""
+    try:
+        dna = BrandDNA.load(brand)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    results = []
+    for upload in files:
+        src = None
+        out_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pptx")
+        out_tmp.close()
+        try:
+            src = _save_upload(upload, ".pptx")
+            validate_deck(src)  # reject before paying for analysis
+            report = MorphPipeline(dna, None, MorphOptions(dry_run=dry_run)).run(
+                src, out_tmp.name
+            )
+            with open(out_tmp.name, "rb") as f:
+                deck_b64 = base64.b64encode(f.read()).decode("ascii")
+            results.append({
+                "file": upload.filename,
+                "status": "ok",
+                "total_changes": report.total_changes,
+                "review_flags": report.review_flags,
+                "deck_base64": None if dry_run else deck_b64,
+            })
+        except UnsafeDeckError as e:
+            results.append({"file": upload.filename, "status": "rejected", "detail": str(e)})
+        except Exception as e:
+            results.append({"file": upload.filename, "status": "failed", "detail": str(e)[:200]})
+        finally:
+            for p in (src, out_tmp.name):
+                if p and os.path.exists(p):
+                    os.remove(p)
+    ok = sum(1 for r in results if r["status"] == "ok")
+    return {"status": "success", "succeeded": ok, "total": len(results), "results": results}
 
 
 @app.post("/api/brand/extract")
