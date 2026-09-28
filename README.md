@@ -37,6 +37,20 @@ Key properties: **role-preserving** mapping (text stays text, surfaces stay surf
 **Live marketing proof:** `brandmorph-studio/` → **https://brandmorph-studio.vercel.app** (Vercel, deploy Root Directory: `brandmorph-studio`)
 **Desktop product:** `ui/` + `backend/` (Tauri 2 + React 19 + FastAPI + python-pptx) — drag, reskin, export native PPTX
 
+## 🟢 New to AI or design tooling? Read this first
+
+**The problem, in human terms.** Your company rebrands — new colors, new fonts. You have 40 PowerPoint decks that suddenly look "wrong". Doing it by hand means opening every slide and repainting text boxes for days, and you *still* miss the 3am chart someone pasted with the old blue.
+
+**What this project does.** BrandMorph is a robot that does that repainting for you: you hand it a deck and a short "brand recipe" file (the brand's colors, fonts, and word preferences — see `backend/brands/akkodis.yaml` for a real example), and it returns a re-branded deck plus a **receipt** listing every single change ("slide 3: text color `FFFFFF` → `F2F6FC`, because it was playing the 'primary text' role").
+
+**The clever part (why "just recolor it" is hard).**
+- PowerPoint decks hide colors in two places: the *theme* (one paint tin that many shapes point at) and *hand-painted* colors (someone picked a hex by hand). V1 of this project rebuilt slides from scratch and destroyed charts, tables, and layouts. V2 repaints the tin **and** remaps every hand-painted color **in place** — the deck is never dismantled.
+- "Nearest color" is measured the way eyes see it, not how computers store it: dark navy `#030C1E` and black `#000000` look almost identical to humans even though their RGB values are far apart. The engine compares colors in **CIE Lab space** (a color distance that matches human perception) and, crucially, maps each color to the brand color playing the same *role* — red text stays text (mapped to the brand's danger/alert color), a white background stays a background.
+- **Text never spills.** Re-branding with a wider font can push text out of its box. A fit-guard measures real text widths with actual font metrics and shrinks one font-size step at a time — or flags it for a human rather than silently breaking the slide.
+- **It's honest twice:** run it a second time and it changes *nothing* (colors already on-brand are recognized as on-brand — the "already brand" test proves it), and the fidelity tests prove your chart, table, grouped shapes, and even image bytes survive untouched.
+
+**Measured outcomes:** 35 automated tests pass offline in seconds — covering theme surgery, role-preserving color mapping, idempotence (second run = 0 changes), fidelity sentinels (charts/tables/groups/pictures byte-identical), fit-guard behavior, the legacy desktop-app API contract, and the command-line tool end-to-end. Every transformation is auditable in the generated `morph_report.md`.
+
 ---
 
 ## Repository structure
