@@ -24,6 +24,7 @@ from .copy import CopyToneRewriter, LLMClient
 from .fit import FitGuard
 from .fonts import FontRoleMapper
 from .format_mapper import DirectFormatMapper
+from .safety import validate_deck
 from .theme import transform as transform_theme
 
 
@@ -47,6 +48,7 @@ class MorphPipeline:
 
     def run(self, source, output, report_dir: str | None = None) -> MorphReport:
         opts = self.options
+        validate_deck(source)  # untrusted input: zip-bomb/zip-slip/magic checks first
         report = MorphReport(source=str(source), brand=self.dna.name, dry_run=opts.dry_run)
         report.inventory = analyze(source)
 

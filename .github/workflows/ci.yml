@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Lint
+        working-directory: backend
+        run: python -m ruff check brandmorph tests main.py
+      - name: Tests (offline)
+        working-directory: backend
+        run: python -m pytest tests -q
+      - name: Dependency audit
+        working-directory: backend
+        run: |
+          pip install pip-audit -q
+          pip-audit -r requirements.txt --ignore-vuln PYSEC-0000-0000 || true
+        continue-on-error: true

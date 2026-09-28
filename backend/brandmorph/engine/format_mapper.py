@@ -26,6 +26,7 @@ from pptx import Presentation
 from ..brand.profile import PALETTE_ROLES, BrandDNA
 from ..report import ChangeEntry, MorphReport
 from .colorutil import hex_delta, hex_to_lab, hex_to_rgb, normalize_hex, rgb_to_hls
+from .safety import safe_fromstring
 
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _SRGB = f"{{{_A}}}srgbClr"
@@ -125,7 +126,7 @@ def _theme_lt1(prs: Presentation) -> str:
         theme = master.part.part_related_by(
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme"
         )
-        root = etree.fromstring(theme.blob)
+        root = safe_fromstring(theme.blob)
         lt1 = root.find(".//a:clrScheme/a:lt1", {"a": _A})
         if lt1 is not None:
             cur = _current_hex_of(lt1)
