@@ -3,6 +3,37 @@
 **Akshay John Xavier — 8y Creative Technologist (Lead Executive, Akkodis)**
 > Enterprise pursuit decks that used to take 40 hrs in PowerPoint, now generated from tokens → code in 45 seconds. No manual design.
 
+## V2 — in-place brand morphing engine
+
+V1's pipeline **decompiled a deck and rebuilt every slide from blank layouts** with five hardcoded colors (`builder.py` `BrandTokens`) and a bbox-based title guess. Charts, tables, groups, layouts and fidelity were destroyed — raw decks could never be re-branded "properly" because the original deck itself was discarded.
+
+**V2 stops rebuilding.** The deck is the substrate; only formatting layers are transformed, in place:
+
+```mermaid
+flowchart TD
+  A[Brand guideline YAML/JSON<br/>optional LLM PDF extraction] --> B[BrandDNA<br/>validated pydantic profile]
+  B --> C[DeckAnalyzer<br/>inventory: theme refs vs explicit colors]
+  C --> D[ThemeTransformer<br/>OOXML theme1.xml clrScheme + fontScheme surgery]
+  C --> E[DirectFormatMapper<br/>role-aware explicit color mapping in Lab space]
+  E --> F[FontRoleMapper<br/>placeholder/size role detection, latin+ea+cs]
+  F --> G[CopyToneRewriter<br/>glossary + optional LLM under orig_len x 1.1 budget]
+  G --> H[FitGuard<br/>PIL text metrics, shrink ladder, review flags]
+  D --> I[transformed.pptx + MorphReport<br/>every change audited]
+  E --> I
+  F --> I
+  G --> I
+  H --> I
+```
+
+Key properties: **role-preserving** mapping (text stays text, surfaces stay surfaces — nearest brand color in CIE Lab, dE76), **idempotent** (applying the same brand twice changes nothing — dE<8 band), **lossless** (charts/tables/images/groups are fidelity sentinels covered by tests), **auditable** (`MorphReport` logs every before→after with role and confidence), and **offline-capable** (LLM copy rewriting is opt-in; the engine is fully functional without it).
+
+- **Diagnosis & design:** [docs/V2_DESIGN.md](docs/V2_DESIGN.md)
+- **Engine package:** `backend/brandmorph/` (analyzer, theme, format_mapper, fonts, copy, fit, pipeline, report, render)
+- **Brand profiles:** `backend/brands/akkodis.yaml`, `backend/brands/corporate_light.yaml`
+- **New API:** `POST /api/brand/apply` (deck + brand → morphed deck + report, `dry_run` supported), `POST /api/deck/inventory`, `POST /api/brand/extract` (LLM-assisted, 501 when unconfigured), `GET /api/version` — legacy `/api/parse_deck` + `/api/export_deck` keep their exact Tauri-UI contract
+- **CLI:** `cd backend && python -m brandmorph apply --deck deck.pptx --brand akkodis --out out.pptx --report ./report` (plus `--dry-run`, `inventory`)
+- **Tests:** `cd backend && python -m pytest tests -q` — 35 offline tests: theme surgery assertions, role-mapping cases, idempotence, fidelity sentinels, FitGuard ladder, legacy API contract, CLI end-to-end
+
 **Live marketing proof:** `brandmorph-studio/` → **https://brandmorph-studio.vercel.app** (Vercel, deploy Root Directory: `brandmorph-studio`)
 **Desktop product:** `ui/` + `backend/` (Tauri 2 + React 19 + FastAPI + python-pptx) — drag, reskin, export native PPTX
 
