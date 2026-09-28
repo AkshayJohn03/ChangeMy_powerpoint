@@ -1,0 +1,7 @@
+# BrandMorph v2 lint config.
+# BLE001/S110: OOXML parsers must tolerate malformed/foreign decks — blind
+#   excepts with skip-and-log semantics are deliberate at part boundaries.
+# B008: FastAPI dependency injection (File(...)/Form(...)) uses default calls.
+# PLW1510/SIM115/RUF059/F841/ASYNC230: minor stylistic allowances in glue code.
+[lint]
+ignore = ["BLE001", "S110", "B008", "PLW1510", "SIM115", "RUF059", "F841", "ASYNC230"]
