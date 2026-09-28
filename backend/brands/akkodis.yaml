@@ -1,0 +1,30 @@
+name: Akkodis Dark
+palette:
+  background: { hex: "030C1E", usage: "slide backgrounds — deep navy canvas" }
+  surface: { hex: "081632", usage: "cards and containers" }
+  surface_alt: { hex: "0E2148", usage: "elevated surfaces, table banding" }
+  text_primary: { hex: "F2F6FC", usage: "primary copy on dark" }
+  text_muted: { hex: "93A5C4", usage: "captions, sources, secondary copy" }
+  accent_primary: { hex: "FFB81C", usage: "headlines, key numbers, KPI highlights" }
+  accent_secondary: { hex: "00E5FF", usage: "diagram strokes, active states" }
+  success: { hex: "2FBF71", usage: "positive deltas, pass states" }
+  warning: { hex: "FFB81C", usage: "attention, at-risk states" }
+  danger: { hex: "E5484D", usage: "regressions, blockers" }
+  link: { hex: "00E5FF", usage: "hyperlinks" }
+typography:
+  heading: { family: "Arial", weight: "bold", fallbacks: ["Segoe UI", "Liberation Sans"] }
+  body: { family: "Segoe UI", weight: "regular", fallbacks: ["Arial", "Liberation Sans"] }
+tone:
+  voice: "confident, precise, engineering-led; short declarative sentences"
+  formality: 0.7
+  glossary:
+    "utilise": "use"
+    "utilize": "use"
+    "leverage": "use"
+    "synergy": "collaboration"
+  banned_words: ["cheap", "hack", "guys"]
+rules:
+  min_contrast: 4.5
+  fit_slack: 0.10
+  preserve_display_fonts: []
+  rewrite_copy: false

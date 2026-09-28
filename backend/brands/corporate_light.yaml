@@ -1,0 +1,28 @@
+name: Corporate Light
+palette:
+  background: { hex: "FFFFFF", usage: "slide backgrounds — clean white" }
+  surface: { hex: "F1F4F9", usage: "cards and containers" }
+  surface_alt: { hex: "E3E9F2", usage: "elevated surfaces, table banding" }
+  text_primary: { hex: "101828", usage: "primary copy on light" }
+  text_muted: { hex: "5A6B85", usage: "captions, sources, secondary copy" }
+  accent_primary: { hex: "0F62FE", usage: "headlines, key numbers, links" }
+  accent_secondary: { hex: "12B886", usage: "diagram strokes, active states" }
+  success: { hex: "12B76A", usage: "positive deltas, pass states" }
+  warning: { hex: "F79009", usage: "attention, at-risk states" }
+  danger: { hex: "D92D20", usage: "regressions, blockers" }
+  link: { hex: "0F62FE", usage: "hyperlinks" }
+typography:
+  heading: { family: "Georgia", weight: "bold", fallbacks: ["Times New Roman"] }
+  body: { family: "Calibri", weight: "regular", fallbacks: ["Arial"] }
+tone:
+  voice: "warm, executive, benefit-first"
+  formality: 0.8
+  glossary:
+    "Utilize": "Use"
+    "leverage": "use"
+  banned_words: ["cheap"]
+rules:
+  min_contrast: 4.5
+  fit_slack: 0.10
+  preserve_display_fonts: []
+  rewrite_copy: false
