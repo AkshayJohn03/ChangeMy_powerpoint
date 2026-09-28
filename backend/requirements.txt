@@ -3,3 +3,10 @@ uvicorn
 python-pptx
 python-multipart
 pydantic
+pydantic-settings
+lxml
+Pillow
+PyYAML
+httpx
+pytest
+ruff
