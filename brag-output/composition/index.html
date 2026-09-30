@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1920, height=1080" />
+<title>BrandMorph — whiteboard lecture</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+  @font-face {
+    font-family: "Ink Free";
+    src: url("assets/fonts/Inkfree.ttf") format("truetype");
+    font-weight: normal; font-style: normal;
+  }
+  :root {
+    --board: #081632;   /* BrandMorph surface navy — the video is painted in the brand it applies */
+    --deep: #030C1E;
+    --chalk: #F2F6FC;   /* text_primary */
+    --dim: #93A5C4;     /* text_muted */
+    --gold: #FFB81C;    /* accent_primary */
+    --cyan: #00E5FF;    /* accent_secondary */
+    --green: #2FBF71;   /* success */
+    --red: #E5484D;     /* danger */
+    --line: rgba(242, 246, 252, 0.24);
+  }
+  body { margin: 0; background: var(--deep); }
+  #root {
+    position: relative; width: 100%; height: 100%; overflow: hidden;
+    background:
+      radial-gradient(1400px 900px at 42% 38%, rgba(255,255,255,0.05), rgba(0,0,0,0) 62%),
+      radial-gradient(1200px 800px at 85% 90%, rgba(0,0,0,0.30), rgba(0,0,0,0) 60%),
+      var(--board);
+    color: var(--chalk);
+    font-family: system-ui, sans-serif;
+  }
+  .clip { position: absolute; inset: 0; }
+  .scene-inner { position: absolute; inset: 0; }
+  .board {
+    position: absolute; inset: 0; box-sizing: border-box;
+    display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 34px;
+    padding: 52px 60px 88px;
+  }
+  .main { position: relative; min-width: 0; }
+  .rail { position: relative; display: flex; flex-direction: column; gap: 13px; justify-content: center; min-width: 0; }
+  h1 {
+    margin: 0 0 24px 0; font-family: "Ink Free", system-ui, sans-serif;
+    font-weight: 400; font-size: 52px; line-height: 1.08; color: var(--chalk);
+  }
+  .u { display: block; width: 240px; height: 5px; margin-top: 12px; border-radius: 3px;
+       background: linear-gradient(90deg, var(--gold), rgba(255,184,28,0.15)); }
+  .u.cyan { background: linear-gradient(90deg, var(--cyan), rgba(0,229,255,0.15)); }
+  .scene-tag {
+    position: absolute; left: 60px; bottom: 30px;
+    font-family: "Ink Free", system-ui, sans-serif; font-size: 26px; color: var(--dim);
+  }
+  .kcard {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+    border-left: 5px solid var(--cyan); border-radius: 10px; padding: 12px 18px;
+  }
+  .kcard.gold { border-left-color: var(--gold); }
+  .kcard.green { border-left-color: var(--green); }
+  .kcard.red { border-left-color: var(--red); }
+  .kcard .term { font-family: "Ink Free", system-ui, sans-serif; font-size: 27px; color: var(--chalk); display: block; }
+  .kcard .def { display: block; margin-top: 3px; font-size: 21px; line-height: 1.3; color: var(--dim); }
+  .panel {
+    background: rgba(255,255,255,0.045); border: 1.5px solid var(--line); border-radius: 12px;
+    padding: 16px 20px; box-sizing: border-box;
+  }
+  .panel .cap { font-family: "Ink Free", system-ui, sans-serif; font-size: 25px; color: var(--chalk); display: block; margin-bottom: 8px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  .chip { display: inline-block; border-radius: 999px; padding: 4px 14px; font-size: 22px; font-weight: 600; }
+  .chip.gold { background: var(--gold); color: #241A06; }
+  .chip.cyan { background: var(--cyan); color: #062028; }
+  .chip.green { background: var(--green); color: #062018; }
+  .chip.red { background: var(--red); color: #1A0507; }
+  .chip.ghost { border: 1.5px solid var(--line); color: var(--dim); }
+  .row { display: flex; align-items: center; gap: 14px; }
+  .dim { color: var(--dim); }
+  .gold { color: var(--gold); }
+  .cyan { color: var(--cyan); }
+  .green { color: var(--green); }
+  .red { color: var(--red); }
+  .absbox { position: absolute; box-sizing: border-box; }
+
+  /* ---- scene 1 ---- */
+  #s1-memo { position: absolute; left: 0; top: 175px; width: 620px; }
+  #s1-memo .memo { border: 2.5px solid var(--gold); border-radius: 14px; padding: 20px 26px; background: rgba(255,184,28,0.06); }
+  #s1-memo .memo .m { font-size: 28px; line-height: 1.4; color: var(--chalk); }
+  #s1-memo .memo .who { display: block; margin-top: 10px; font-size: 20px; color: var(--dim); }
+  #s1-count { position: absolute; left: 680px; top: 195px; width: 500px; }
+  #s1-count .n { font-family: "Ink Free", system-ui, sans-serif; font-size: 150px; line-height: 1; color: var(--gold); }
+  #s1-count .t { display: block; font-size: 34px; color: var(--chalk); margin-top: 4px; }
+  #s1-count .s { display: block; font-size: 21px; color: var(--dim); margin-top: 8px; line-height: 1.35; }
+  #s1-chart { position: absolute; left: 0; top: 560px; width: 1180px; }
+  .barchart { display: flex; align-items: flex-end; gap: 10px; height: 120px; width: 300px; border-bottom: 2.5px solid var(--line); padding: 0 8px; }
+  .barchart .bar { width: 44px; border-radius: 4px 4px 0 0; background: rgba(158,197,232,0.45); }
+  #s1-chart .panel { display: flex; gap: 26px; align-items: center; }
+  #s1-chart .note { font-size: 23px; color: var(--chalk); line-height: 1.35; }
+  #s1-chart .note b { color: var(--gold); }
+  #s1-chart .oldblue { display: inline-block; width: 34px; height: 34px; border-radius: 8px; background: #2E75B6; border: 2px solid var(--line); vertical-align: -8px; margin-left: 8px; }
+
+  /* ---- scene 2 ---- */
+  #s2-pair { position: absolute; left: 0; top: 170px; width: 1180px; display: grid; grid-template-columns: 1fr 150px 1fr; gap: 0; align-items: stretch; }
+  .deckbox { border: 2px solid var(--line); border-radius: 14px; padding: 16px 20px; min-height: 380px; }
+  .deckbox .cap { font-family: "Ink Free", system-ui, sans-serif; font-size: 26px; display: block; margin-bottom: 12px; }
+  .mini-chart { display: flex; align-items: flex-end; gap: 8px; height: 90px; width: 190px; border-bottom: 2px solid var(--line); }
+  .mini-chart .bar { width: 30px; border-radius: 3px 3px 0 0; background: rgba(0,229,255,0.55); }
+  .mini-table { border-collapse: collapse; font-size: 17.5px; margin-top: 12px; }
+  .mini-table td, .mini-table th { border: 1.5px solid var(--line); padding: 4px 10px; }
+  .mini-table th { color: var(--gold); }
+  .grp { border: 2px dashed var(--cyan); border-radius: 8px; padding: 8px 12px; display: inline-block; margin-top: 12px; font-size: 19px; color: var(--dim); }
+  #s2-arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--dim); font-size: 20px; text-align: center; }
+  #s2-arrow .a { font-size: 44px; color: var(--red); }
+  #s2-out .generic { border: 2px dashed rgba(147,165,196,0.6); border-radius: 8px; height: 52px; margin-bottom: 12px; display: flex; align-items: center; padding: 0 14px; color: var(--dim); font-size: 19px; position: relative; }
+  #s2-out .generic .x { position: absolute; right: 12px; color: var(--red); font-weight: 800; font-size: 24px; }
+  #s2-substrate { position: absolute; left: 0; top: 585px; width: 1180px; border-left: 4px solid var(--cyan); padding-left: 16px; font-size: 24px; color: var(--chalk); line-height: 1.4; }
+  #s2-stamp { position: absolute; right: 10px; top: 500px; font-family: "Ink Free", system-ui, sans-serif; font-size: 36px; color: var(--gold); transform: rotate(-3deg); border: 3px solid var(--gold); border-radius: 10px; padding: 4px 18px; }
+
+  /* ---- scene 3 ---- */
+  #s3-tin { position: absolute; left: 0; top: 170px; width: 420px; }
+  .tin { border: 3px solid var(--gold); border-radius: 16px; padding: 14px 18px; background: rgba(255,184,28,0.05); }
+  .tin .tname { font-family: "Ink Free", system-ui, sans-serif; font-size: 32px; color: var(--gold); display: block; }
+  .tin .slots { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+  .slot { border: 1.5px solid var(--gold); color: var(--gold); border-radius: 6px; padding: 2px 9px; font-size: 17.5px; font-family: ui-monospace, monospace; }
+  #s3-refs { position: absolute; left: 460px; top: 190px; width: 300px; }
+  .refrow { font-size: 20px; color: var(--dim); margin-bottom: 26px; }
+  .refrow .shapechip { display: inline-block; border: 2px solid var(--cyan); color: var(--chalk); border-radius: 8px; padding: 6px 12px; margin-bottom: 4px; }
+  .refrow .pt { color: var(--cyan); }
+  #s3-hand { position: absolute; left: 800px; top: 190px; width: 380px; }
+  .handhex { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; font-size: 20px; color: var(--dim); }
+  .handhex .sw { width: 44px; height: 44px; border-radius: 9px; border: 2px solid var(--line); }
+  .handhex .hx { font-family: ui-monospace, monospace; color: var(--chalk); }
+  #s3-actions { position: absolute; left: 0; top: 520px; width: 1180px; display: flex; gap: 20px; }
+  .act { flex: 1; border: 2.5px solid var(--cyan); border-radius: 12px; padding: 14px 18px; background: rgba(0,229,255,0.05); }
+  .act .k { font-family: "Ink Free", system-ui, sans-serif; font-size: 27px; color: var(--cyan); display: block; }
+  .act .d { display: block; margin-top: 4px; font-size: 19.5px; color: var(--dim); line-height: 1.3; }
+  #s3-keep { position: absolute; left: 0; top: 690px; font-family: "Ink Free", system-ui, sans-serif; font-size: 33px; color: var(--gold); }
+
+  /* ---- scene 4 ---- */
+  #s4-swatches { position: absolute; left: 0; top: 170px; display: flex; gap: 26px; }
+  .swcard { width: 300px; border: 2px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .swcard .c { height: 130px; }
+  .swcard .l { padding: 10px 16px; font-family: ui-monospace, monospace; font-size: 21px; color: var(--chalk); background: rgba(255,255,255,0.04); }
+  #s4-verdict { position: absolute; left: 680px; top: 190px; width: 500px; font-size: 24px; line-height: 1.5; color: var(--chalk); }
+  #s4-verdict b { color: var(--gold); }
+  #s4-lab { position: absolute; left: 0; top: 480px; width: 1180px; }
+  .track { position: relative; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #000000, #3d3d3d, #777); margin: 26px 0 8px; }
+  .labdot { position: absolute; top: -9px; width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--chalk); }
+  .tracklbl { font-size: 20px; color: var(--dim); }
+  #s4-demorow { position: absolute; left: 0; top: 660px; width: 1180px; font-size: 23px; color: var(--chalk); border-left: 4px solid var(--cyan); padding-left: 16px; line-height: 1.4; }
+  #s4-demorow b { color: var(--cyan); }
+
+  /* ---- scene 5 ---- */
+  #s5-rows { position: absolute; left: 0; top: 175px; width: 1180px; }
+  .maprow { display: flex; align-items: center; gap: 18px; padding: 16px 0; border-bottom: 1.5px dashed var(--line); }
+  .maprow:last-child { border-bottom: none; }
+  .swatch { width: 56px; height: 56px; border-radius: 10px; border: 2px solid var(--line); flex: none; }
+  .mlabel { width: 250px; font-size: 21px; color: var(--chalk); line-height: 1.25; }
+  .mlabel .hx { font-family: ui-monospace, monospace; color: var(--dim); font-size: 18.5px; }
+  .arrow5 { font-size: 32px; color: var(--cyan); }
+  .rolechip { margin-left: auto; }
+  #s5-rule { position: absolute; left: 0; top: 520px; width: 1180px; border: 2.5px solid var(--gold); border-radius: 12px; padding: 14px 20px; font-size: 24px; color: var(--chalk); background: rgba(255,184,28,0.05); }
+  #s5-log { position: absolute; left: 0; top: 650px; font-size: 22px; color: var(--dim); }
+
+  /* ---- scene 6 ---- */
+  #s6-box { position: absolute; left: 0; top: 170px; width: 560px; }
+  .textbox { border: 2.5px solid var(--cyan); border-radius: 10px; padding: 14px 18px; min-height: 170px; background: rgba(0,229,255,0.04); }
+  .tline { height: 13px; border-radius: 6px; background: rgba(242,246,252,0.75); margin: 12px 0; }
+  .tline.over { background: var(--red); width: 70%; }
+  #s6-box .lbl { display: block; margin-top: 10px; font-size: 20px; color: var(--dim); }
+  #s6-ladder { position: absolute; left: 620px; top: 190px; width: 560px; }
+  .step { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; font-size: 23px; color: var(--chalk); }
+  .step .n { width: 44px; height: 44px; border-radius: 50%; background: var(--gold); color: #241A06; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 22px; flex: none; }
+  .step .flag { border: 2.5px solid var(--red); color: var(--red); border-radius: 10px; padding: 6px 16px; font-family: ui-monospace, monospace; font-size: 21px; }
+  #s6-bleed { position: absolute; left: 0; top: 480px; width: 1180px; }
+  .slideedge { position: relative; height: 120px; border: 2px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .wrapeff { position: absolute; left: 30px; top: 36px; height: 46px; width: 1050px; background: rgba(229,72,77,0.25); border: 2.5px solid var(--red); border-radius: 8px; display: flex; align-items: center; padding: 0 16px; color: var(--chalk); font-size: 20px; }
+  .edgemark { position: absolute; right: 120px; top: 0; bottom: 0; width: 3px; background: var(--gold); }
+  #s6-bleed .cap6 { display: block; margin-top: 10px; font-size: 21px; color: var(--dim); }
+
+  /* ---- scene 7 ---- */
+  #s7-flow { position: absolute; left: 0; top: 190px; width: 1180px; display: flex; align-items: center; justify-content: center; gap: 20px; }
+  .deckchip { border: 2.5px solid var(--line); border-radius: 12px; padding: 18px 24px; font-family: "Ink Free", system-ui, sans-serif; font-size: 27px; text-align: center; color: var(--chalk); }
+  .deckchip.brand { border-color: var(--green); }
+  .runpill { border: 2.5px solid var(--gold); color: var(--gold); border-radius: 999px; padding: 8px 20px; font-size: 22px; font-weight: 700; }
+  .zerochip { font-family: "Ink Free", system-ui, sans-serif; font-size: 34px; color: var(--green); }
+  #s7-band { position: absolute; left: 0; top: 400px; width: 1180px; display: flex; align-items: center; gap: 26px; justify-content: center; }
+  .bandring { position: relative; width: 150px; height: 150px; border: 3px dashed var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .bandring .core { width: 62px; height: 62px; border-radius: 50%; background: #030C1E; border: 2px solid var(--line); }
+  .bandring .inband { position: absolute; top: 12px; right: 8px; width: 34px; height: 34px; border-radius: 50%; background: #0A1420; border: 2px solid var(--line); }
+  #s7-band .txt { font-size: 24px; color: var(--chalk); line-height: 1.45; width: 640px; }
+  #s7-band .txt b { color: var(--green); }
+  #s7-hash { position: absolute; left: 0; top: 640px; width: 1180px; text-align: center; font-size: 22px; color: var(--dim); }
+
+  /* ---- scene 8 ---- */
+  #s8-receipt { position: absolute; left: 0; top: 170px; width: 1180px; }
+  .rtable { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 20px; }
+  .rtable th, .rtable td { border: 1.5px solid var(--line); padding: 8px 12px; text-align: left; }
+  .rtable th { color: var(--gold); font-family: system-ui, sans-serif; font-size: 19px; }
+  .rtable td.sw { width: 46px; }
+  .swsq { display: inline-block; width: 26px; height: 26px; border-radius: 6px; border: 1.5px solid var(--line); vertical-align: middle; }
+  #s8-totals { position: absolute; left: 0; top: 520px; width: 1180px; display: flex; gap: 18px; align-items: center; }
+  #s8-badges { position: absolute; left: 0; top: 620px; width: 1180px; display: flex; gap: 18px; }
+  .badge { border: 2px solid var(--line); border-radius: 12px; padding: 10px 18px; font-size: 21px; color: var(--chalk); }
+  .badge b { color: var(--gold); }
+
+  /* ---- scene 9 ---- */
+  #s9-cards { position: absolute; left: 0; top: 170px; width: 1180px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .defcard { border: 2px solid var(--red); border-radius: 14px; padding: 16px 18px; background: rgba(229,72,77,0.05); min-height: 240px; box-sizing: border-box; }
+  .defcard .dt { font-family: "Ink Free", system-ui, sans-serif; font-size: 26px; color: var(--chalk); display: block; margin-bottom: 8px; }
+  .defcard .dd { font-size: 19.5px; color: var(--dim); line-height: 1.35; }
+  .defcard .reject { display: inline-block; margin-top: 12px; background: var(--red); color: #1A0507; border-radius: 8px; padding: 4px 12px; font-family: ui-monospace, monospace; font-size: 18px; font-weight: 700; }
+  .defcard .gauge { margin-top: 10px; height: 12px; border-radius: 6px; background: rgba(242,246,252,0.12); position: relative; overflow: hidden; }
+  .defcard .gauge .fill9 { position: absolute; inset: 0; width: 8%; background: var(--red); border-radius: 6px; }
+  #s9-pills { position: absolute; left: 0; top: 560px; width: 1180px; display: flex; gap: 18px; }
+  .pill9 { border: 2px solid var(--green); color: var(--chalk); border-radius: 999px; padding: 8px 20px; font-size: 21px; }
+  .pill9 b { color: var(--green); }
+
+  /* ---- scene 10 ---- */
+  #s10-grid { position: absolute; left: 0; top: 175px; width: 1180px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .stat { border: 1.5px solid var(--line); border-radius: 14px; padding: 18px 20px; background: rgba(255,255,255,0.035); }
+  .stat .n { font-family: "Ink Free", system-ui, sans-serif; font-size: 62px; color: var(--cyan); line-height: 1; display: block; }
+  .stat .n.gold { color: var(--gold); }
+  .stat .n.green { color: var(--green); }
+  .stat .t { display: block; margin-top: 8px; font-size: 22px; color: var(--chalk); font-weight: 600; }
+  .stat .w { display: block; margin-top: 5px; font-size: 18.5px; line-height: 1.3; color: var(--dim); }
+  #s10-note { position: absolute; left: 0; top: 740px; width: 1180px; font-size: 21px; color: var(--dim); border-left: 4px solid var(--green); padding-left: 16px; line-height: 1.4; }
+
+  /* ---- scene 11 ---- */
+  #s11-list { position: absolute; left: 0; top: 165px; width: 1180px; }
+  .r11 { display: grid; grid-template-columns: 44px 1fr; column-gap: 14px; align-items: start; padding: 9px 0; border-bottom: 1.5px dashed var(--line); font-size: 25px; }
+  .r11 .dot { color: var(--cyan); font-weight: 800; }
+  #s11-end { position: absolute; left: 0; top: 620px; width: 1180px; }
+  #s11-end .big { font-family: "Ink Free", system-ui, sans-serif; font-size: 50px; color: var(--chalk); display: block; }
+  #s11-end .small { font-size: 27px; color: var(--gold); display: block; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="brandmorph-lecture" data-start="0" data-width="1920" data-height="1080" data-duration="365.515">
+
+  <!-- ============ SCENE 1 : the rebrand memo (0 – 31.358) ============ -->
+  <section id="s1" class="clip" data-start="0" data-duration="31.358">
+    <div class="scene-inner" id="s1-inner">
+      <div class="board">
+        <div class="main">
+          <h1>The rebrand memo<span class="u" id="s1-u"></span></h1>
+          <div id="s1-memo">
+            <div class="memo">
+              <div class="m">“We’ve rebranded. New colors, new fonts. Please update all materials.”</div>
+              <span class="who">MEMO · The Design Team — sounds so simple</span>
+            </div>
+          </div>
+          <div id="s1-count">
+            <span class="n" id="s1-num">0</span>
+            <span class="t">PowerPoint decks</span>
+            <span class="s">sales · pitches · training — every slide colored by hand, by different people, over different years</span>
+          </div>
+          <div id="s1-chart">
+            <div class="panel">
+              <div class="barchart"><div class="bar" style="height:52px"></div><div class="bar" style="height:88px"></div><div class="bar" style="height:38px"></div></div>
+              <div class="note">3 a.m., someone pasted a chart<br>still wearing the old blue<span class="oldblue"></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="rail">
+          <div class="kcard gold" id="kc-rebrand">
+            <span class="term">rebrand</span>
+            <span class="def">The company officially changes its colors, fonts, and wording. Every existing file must follow.</span>
+          </div>
+          <div class="kcard" id="kc-bm">
+            <span class="term">BrandMorph</span>
+            <span class="def">The robot: a deck and a brand recipe go in — a re-skinned deck and a receipt come out.</span>
+          </div>
+          <div class="kcard" id="kc-pptx1">
+            <span class="term">PPTX</span>
+            <span class="def">A PowerPoint file. Not really a “document” — a folder of XML parts zipped together.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">01 · the memo</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 2 : v1's fatal flaw (31.358 – 67.793) ============ -->
+  <section id="s2" class="clip" data-start="31.358" data-duration="36.435">
+    <div class="scene-inner" id="s2-inner">
+      <div class="board">
+        <div class="main">
+          <h1>V1 rebuilt — and destroyed<span class="u" id="s2-u"></span></h1>
+          <div id="s2-pair">
+            <div class="deckbox" id="s2-in">
+              <span class="cap">your deck</span>
+              <div class="mini-chart"><div class="bar" style="height:40px"></div><div class="bar" style="height:70px"></div><div class="bar" style="height:55px"></div></div>
+              <table class="mini-table"><tr><th>Q</th><th>Rev</th></tr><tr><td>Q1</td><td>1.2M</td></tr></table>
+              <div class="grp">grouped shapes</div>
+            </div>
+            <div id="s2-arrow"><span>v1 pipeline</span><span class="a">→</span><span>rebuild every slide from a blank layout</span></div>
+            <div class="deckbox" id="s2-out">
+              <span class="cap">v1 output — “a deck”</span>
+              <div class="generic">generic rounded box<span class="x">✕</span></div>
+              <div class="generic">text box<span class="x">✕</span></div>
+              <div class="generic">text box<span class="x">✕</span></div>
+            </div>
+          </div>
+          <div id="s2-stamp">rebuilding is the bug</div>
+          <div id="s2-substrate">v2’s principle: <b class="cyan">the original deck is the substrate</b> — transform only the formatting layers; charts, tables, images, notes stay byte-identical.</div>
+        </div>
+        <div class="rail">
+          <div class="kcard gold" id="kc-rb">
+            <span class="term">rebuild-vs-inplace</span>
+            <span class="def">v1 decompiled decks and redrew them from blank layouts; v2 edits the original file’s formatting in place.</span>
+          </div>
+          <div class="kcard" id="kc-fid">
+            <span class="term">fidelity</span>
+            <span class="def">Charts, tables, groups, images and notes survive untouched — proven by tests, not promised.</span>
+          </div>
+          <div class="kcard" id="kc-master">
+            <span class="term">slide master · layout</span>
+            <span class="def">The inherited templates every slide is built on. v1 replaced them all; v2 keeps them byte-identical.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">02 · the fatal flaw</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 3 : paint tin vs hand-painted (67.793 – 106.575) ============ -->
+  <section id="s3" class="clip" data-start="67.793" data-duration="38.782">
+    <div class="scene-inner" id="s3-inner">
+      <div class="board">
+        <div class="main">
+          <h1>Two places colors hide<span class="u" id="s3-u"></span></h1>
+          <div id="s3-tin">
+            <div class="tin">
+              <span class="tname">the theme — one paint tin</span>
+              <div class="slots">
+                <span class="slot">dk1</span><span class="slot">lt1</span><span class="slot">dk2</span><span class="slot">lt2</span>
+                <span class="slot">accent1</span><span class="slot">accent2</span><span class="slot">accent3</span><span class="slot">accent4</span>
+                <span class="slot">accent5</span><span class="slot">accent6</span><span class="slot">hlink</span><span class="slot">folHlink</span>
+              </div>
+            </div>
+          </div>
+          <div id="s3-refs">
+            <div class="refrow" id="rf1"><span class="shapechip">shape A</span><br><span class="pt">schemeClr → accent2</span></div>
+            <div class="refrow" id="rf2"><span class="shapechip">shape B</span><br><span class="pt">schemeClr → dk1</span></div>
+            <div class="refrow" id="rf3"><span class="shapechip">shape C</span><br><span class="pt">schemeClr → lt1</span></div>
+          </div>
+          <div id="s3-hand">
+            <span class="cap" style="font-family:'Ink Free',sans-serif; font-size:26px; display:block; margin-bottom:14px;">hand-painted — ignores the tin</span>
+            <div class="handhex" id="hh1"><span class="sw" style="background:#1F4E79"></span><span class="hx">srgbClr 1F4E79</span></div>
+            <div class="handhex" id="hh2"><span class="sw" style="background:#BFBFBF"></span><span class="hx">srgbClr BFBFBF</span></div>
+            <div class="handhex" id="hh3"><span class="sw" style="background:#C00000"></span><span class="hx">srgbClr C00000</span></div>
+          </div>
+          <div id="s3-actions">
+            <div class="act" id="act1"><span class="k">① repaint the tin</span><span class="d">theme surgery on theme1.xml — every referencing shape updates at once</span></div>
+            <div class="act" id="act2"><span class="k">② remap every hand-painted hex</span><span class="d">found one by one, remapped in place — the deck is never dismantled</span></div>
+          </div>
+          <div id="s3-keep">a PPTX is a ZIP archive of XML parts — a folder dressed up as a file</div>
+        </div>
+        <div class="rail">
+          <div class="kcard" id="kc-ooxml">
+            <span class="term">OOXML</span>
+            <span class="def">The spec for those XML parts — every visual feature of a deck is text in one of them.</span>
+          </div>
+          <div class="kcard gold" id="kc-theme">
+            <span class="term">theme</span>
+            <span class="def">The deck-wide paint tin: named colors and fonts that shapes reference instead of owning.</span>
+          </div>
+          <div class="kcard" id="kc-clr">
+            <span class="term">clrScheme</span>
+            <span class="def">The theme’s 12 color slots (dk1 … folHlink) — rewritten straight from the brand DNA.</span>
+          </div>
+          <div class="kcard" id="kc-srgb">
+            <span class="term">srgbClr</span>
+            <span class="def">A hand-painted hex written on a shape or run. Ignores the theme — must be remapped one by one.</span>
+          </div>
+          <div class="kcard" id="kc-tools">
+            <span class="term">python-pptx + lxml</span>
+            <span class="def">The engine’s tools: python-pptx for shapes; lxml for raw theme XML surgery.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">03 · the paint tin</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 4 : Lab color distance (106.575 – 138.296) ============ -->
+  <section id="s4" class="clip" data-start="106.575" data-duration="31.721">
+    <div class="scene-inner" id="s4-inner">
+      <div class="board">
+        <div class="main">
+          <h1>Nearest — measured like eyes<span class="u cyan" id="s4-u"></span></h1>
+          <div id="s4-swatches">
+            <div class="swcard" id="sw-navy"><div class="c" style="background:#030C1E"></div><div class="l">brand navy · 030C1E</div></div>
+            <div class="swcard" id="sw-black"><div class="c" style="background:#000000"></div><div class="l">pure black · 000000</div></div>
+          </div>
+          <div id="s4-verdict">
+            RGB says: <b>every number differs</b> (3, 12, 30).<br>
+            Your eyes say: <b>nearly identical</b>.<br>
+            RGB distance lies — so the engine doesn’t use it.
+          </div>
+          <div id="s4-lab" class="panel">
+            <span class="cap">CIE Lab — a color space built so distance matches perception</span>
+            <div class="track">
+              <span class="labdot" id="dot-black" style="left:2%; background:#000"></span>
+              <span class="labdot" id="dot-navy" style="left:9%; background:#030C1E"></span>
+            </div>
+            <span class="tracklbl">ΔE 12.6 — a subtle difference · <span class="mono">ΔE76 = straight-line distance in Lab</span></span>
+          </div>
+          <div id="s4-demorow">for scale — the demo deck’s real remaps measured <b>ΔE 20.6 – 63.0</b>: clearly different colors. The mapping picks the smallest ΔE to a brand color; ties break by hue.</div>
+        </div>
+        <div class="rail">
+          <div class="kcard" id="kc-rgb">
+            <span class="term">RGB</span>
+            <span class="def">Color as red/green/blue numbers. Storage-friendly — but distances don’t match what eyes see.</span>
+          </div>
+          <div class="kcard" id="kc-lab">
+            <span class="term">CIE Lab</span>
+            <span class="def">A perceptual color space: L is lightness, a and b the color axes. Equal steps look equal.</span>
+          </div>
+          <div class="kcard gold" id="kc-de">
+            <span class="term">Delta-E (dE76)</span>
+            <span class="def">One number for “how different do these look?” — straight-line distance in Lab, implemented by hand.</span>
+          </div>
+          <div class="kcard" id="kc-perc">
+            <span class="term">perceptual color distance</span>
+            <span class="def">Measuring like eyes, not like storage. It’s the difference between designed and spreadsheet.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">04 · Lab space</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 5 : role-preserving mapping (138.296 – 173.814) ============ -->
+  <section id="s5" class="clip" data-start="138.296" data-duration="35.518">
+    <div class="scene-inner" id="s5-inner">
+      <div class="board">
+        <div class="main">
+          <h1>Role-preserving mapping<span class="u" id="s5-u"></span></h1>
+          <div id="s5-rows">
+            <div class="maprow" id="mr1">
+              <span class="swatch" style="background:#C00000"></span>
+              <span class="mlabel">red text <span class="hx">C00000</span></span>
+              <span class="arrow5">→</span>
+              <span class="swatch" style="background:#E5484D"></span>
+              <span class="mlabel">brand danger <span class="hx">E5484D</span> · ΔE 26.4</span>
+              <span class="chip cyan rolechip">TEXT stays TEXT</span>
+            </div>
+            <div class="maprow" id="mr2">
+              <span class="swatch" style="background:#1F4E79"></span>
+              <span class="mlabel">dark fill <span class="hx">1F4E79</span></span>
+              <span class="arrow5">→</span>
+              <span class="swatch" style="background:#030C1E"></span>
+              <span class="mlabel">brand background <span class="hx">030C1E</span> · ΔE 33.4</span>
+              <span class="chip gold rolechip">BACKGROUND</span>
+            </div>
+            <div class="maprow" id="mr3">
+              <span class="swatch" style="background:#2E75B6"></span>
+              <span class="mlabel">chart line <span class="hx">2E75B6</span></span>
+              <span class="arrow5">→</span>
+              <span class="swatch" style="background:#00E5FF"></span>
+              <span class="mlabel">brand accent <span class="hx">00E5FF</span> · ΔE 53.5</span>
+              <span class="chip cyan rolechip">DATA INK</span>
+            </div>
+          </div>
+          <div id="s5-rule">classify the role first — lightness, saturation, context — then map to the brand color playing the <b class="gold">same role</b>. Near-white on a dark slide is text; the same hex in a chart bar is data ink.</div>
+          <div id="s5-log">every decision lands in the change log — with its role and its ΔE</div>
+        </div>
+        <div class="rail">
+          <div class="kcard gold" id="kc-rpm">
+            <span class="term">role-preserving mapping</span>
+            <span class="def">Map a color to the brand color playing the same role. Red text stays text — never a background.</span>
+          </div>
+          <div class="kcard" id="kc-rc">
+            <span class="term">role classification</span>
+            <span class="def">The guess that makes mapping safe: background, surface, text, accent — from luminance + context.</span>
+          </div>
+          <div class="kcard" id="kc-hue">
+            <span class="term">hue affinity</span>
+            <span class="def">Ties broken by hue: warm stays warm. Red never becomes cyan “because numbers”.</span>
+          </div>
+          <div class="kcard" id="kc-cl2">
+            <span class="term">change log</span>
+            <span class="def">One row per edit: before → after, role, ΔE, confidence.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">05 · roles</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 6 : the fit guard (173.814 – 208.180) ============ -->
+  <section id="s6" class="clip" data-start="173.814" data-duration="34.366">
+    <div class="scene-inner" id="s6-inner">
+      <div class="board">
+        <div class="main">
+          <h1>The fit guard<span class="u" id="s6-u"></span></h1>
+          <div id="s6-box">
+            <div class="textbox">
+              <div class="tline" style="width:100%"></div>
+              <div class="tline" style="width:96%"></div>
+              <div class="tline" style="width:88%"></div>
+              <div class="tline over" id="s6-overflow" style="width:70%"></div>
+            </div>
+            <span class="lbl">a wider brand font → 4 lines needed, the box fits 3</span>
+          </div>
+          <div id="s6-ladder">
+            <div class="step" id="st6a"><span class="n">1</span><span>tighten the spacing</span></div>
+            <div class="step" id="st6b"><span class="n">2</span><span>font size −1pt</span></div>
+            <div class="step" id="st6c"><span class="n">3</span><span>font size −2pt — two steps maximum</span></div>
+            <div class="step" id="st6d"><span class="flag">needs_review</span><span>flagged for a human — boxes are never widened</span></div>
+          </div>
+          <div id="s6-bleed" class="panel">
+            <span class="cap">the sneakier case — word wrap OFF</span>
+            <div class="slideedge">
+              <div class="wrapeff" id="wrapeff">one long line — grows sideways forever</div>
+              <div class="edgemark"></div>
+            </div>
+            <span class="cap6">measured: ~768pt of text vs ~240pt of slide left — <span class="gold">horizontal bleed, flagged</span></span>
+          </div>
+        </div>
+        <div class="rail">
+          <div class="kcard gold" id="kc-fit">
+            <span class="term">fit guard</span>
+            <span class="def">Stage ⑦: measure every text frame against its box — before anything ships.</span>
+          </div>
+          <div class="kcard" id="kc-pil">
+            <span class="term">PIL font metrics</span>
+            <span class="def">Real text widths from actual font files — not averages, not guesses.</span>
+          </div>
+          <div class="kcard" id="kc-wrap">
+            <span class="term">word-wrap simulation</span>
+            <span class="def">Replays PowerPoint’s wrapping to count the lines a box will actually need.</span>
+          </div>
+          <div class="kcard" id="kc-ladder">
+            <span class="term">shrink ladder</span>
+            <span class="def">Tighten → −1pt → −2pt → flag for review. Never widen the box.</span>
+          </div>
+          <div class="kcard red" id="kc-bleed">
+            <span class="term">horizontal bleed</span>
+            <span class="def">A wrap-off text box overflowing the slide edge — measured and flagged.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">06 · the fit guard</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 7 : idempotence (208.180 – 231.480) ============ -->
+  <section id="s7" class="clip" data-start="208.180" data-duration="23.300">
+    <div class="scene-inner" id="s7-inner">
+      <div class="board">
+        <div class="main">
+          <h1>Run it twice — nothing changes<span class="u cyan" id="s7-u"></span></h1>
+          <div id="s7-flow">
+            <div class="deckchip" id="dc1">raw deck</div>
+            <div class="runpill" id="rp1">run 1</div>
+            <div class="deckchip brand" id="dc2">branded deck</div>
+            <div class="runpill" id="rp2">run 2</div>
+            <span class="zerochip" id="zc1">0 changes</span>
+          </div>
+          <div id="s7-band">
+            <div class="bandring" id="ring7">
+              <span class="core"></span>
+              <span class="inband"></span>
+            </div>
+            <div class="txt">any color already within <b>ΔE &lt; 8</b> of a brand color counts as <b>already on-brand</b> — and is left alone. Without that band, every run would nudge every color a little.</div>
+          </div>
+          <div id="s7-hash">designed in, not lucky — a test proves it, and every report carries an <span class="cyan mono">idempotence hash</span> that proves it again</div>
+        </div>
+        <div class="rail">
+          <div class="kcard gold" id="kc-idem">
+            <span class="term">idempotence</span>
+            <span class="def">Running the same brand twice changes nothing the second time.</span>
+          </div>
+          <div class="kcard" id="kc-band">
+            <span class="term">ΔE &lt; 8 band</span>
+            <span class="def">Colors already within distance 8 of a brand color count as on-brand.</span>
+          </div>
+          <div class="kcard" id="kc-hash">
+            <span class="term">idempotence hash</span>
+            <span class="def">A fingerprint of the transformed deck — identical across re-runs.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">07 · idempotence</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 8 : the receipt (231.480 – 258.727) ============ -->
+  <section id="s8" class="clip" data-start="231.480" data-duration="27.247">
+    <div class="scene-inner" id="s8-inner">
+      <div class="board">
+        <div class="main">
+          <h1>The receipt<span class="u" id="s8-u"></span></h1>
+          <div id="s8-receipt" class="panel">
+            <span class="cap">morph_report.md — real rows from the committed demo deck</span>
+            <table class="rtable">
+              <tr><th>slide</th><th>element</th><th>before</th><th>after</th><th>role</th><th>ΔE</th></tr>
+              <tr id="rr1"><td>0</td><td>fill</td><td><span class="swsq" style="background:#1F4E79"></span> 1F4E79</td><td><span class="swsq" style="background:#030C1E"></span> 030C1E</td><td>background</td><td>33.4</td></tr>
+              <tr id="rr2"><td>1</td><td>text</td><td><span class="swsq" style="background:#C00000"></span> C00000</td><td><span class="swsq" style="background:#E5484D"></span> E5484D</td><td>danger</td><td>26.4</td></tr>
+              <tr id="rr3"><td>2</td><td>chart line</td><td><span class="swsq" style="background:#2E75B6"></span> 2E75B6</td><td><span class="swsq" style="background:#00E5FF"></span> 00E5FF</td><td>accent_secondary</td><td>53.5</td></tr>
+              <tr id="rr4"><td>1</td><td>text</td><td><span class="swsq" style="background:#BFBFBF"></span> BFBFBF</td><td><span class="swsq" style="background:#93A5C4"></span> 93A5C4</td><td>text_muted</td><td>20.6</td></tr>
+            </table>
+          </div>
+          <div id="s8-totals">
+            <span class="chip gold" id="tot8">65 audited changes · demo deck</span>
+            <span class="chip ghost" id="tot8b">18 color remaps · 29 font roles · 18 theme slots</span>
+          </div>
+          <div id="s8-badges">
+            <div class="badge" id="bd1"><b>DRY RUN</b> — the complete plan, zero changed files</div>
+            <div class="badge" id="bd2"><b>needs review: 1</b> — wrap-off bleed, slide 2</div>
+          </div>
+        </div>
+        <div class="rail">
+          <div class="kcard gold" id="kc-report">
+            <span class="term">morph report</span>
+            <span class="def">The receipt: JSON + Markdown — counts per stage, full change log, review flags.</span>
+          </div>
+          <div class="kcard" id="kc-flag">
+            <span class="term">review flag</span>
+            <span class="def">“A human should look at this.” An enterprise tool that never admits uncertainty is lying.</span>
+          </div>
+          <div class="kcard" id="kc-dry">
+            <span class="term">dry run</span>
+            <span class="def">Every stage runs against a throwaway copy — you get the plan, not a file.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">08 · the receipt</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 9 : hostile decks (258.727 – 296.186) ============ -->
+  <section id="s9" class="clip" data-start="258.727" data-duration="37.459">
+    <div class="scene-inner" id="s9-inner">
+      <div class="board">
+        <div class="main">
+          <h1>Hostile decks, stopped at the door<span class="u" id="s9-u"></span></h1>
+          <div id="s9-cards">
+            <div class="defcard" id="d9a">
+              <span class="dt">zip bomb</span>
+              <div class="dd">a <span class="mono">40 KB</span> file claiming to decompress to petabytes. Caps run <b>before extraction</b>: ratio ≤ 200×, total ≤ 250 MB.</div>
+              <div class="gauge"><div class="fill9" id="g9a"></div></div>
+              <span class="reject">REJECTED</span>
+            </div>
+            <div class="defcard" id="d9b">
+              <span class="dt">zip-slip</span>
+              <div class="dd">entry paths escaping the extraction dir:<br><span class="mono gold">../../somewhere/evil</span><br>every path validated first.</div>
+              <span class="reject">PATH-CHECKED</span>
+            </div>
+            <div class="defcard" id="d9c">
+              <span class="dt">XML entity bomb</span>
+              <div class="dd">“billion laughs”: nested entities exploding exponentially on parse. The hardened parser refuses entity expansion — entirely.</div>
+              <span class="reject">ENTITIES: OFF</span>
+            </div>
+          </div>
+          <div id="s9-pills">
+            <div class="pill9" id="p9a"><b>upload cap</b> · 120 MB at the API door</div>
+            <div class="pill9" id="p9b"><b>batch processing</b> · one hostile deck fails alone, the batch continues</div>
+          </div>
+        </div>
+        <div class="rail">
+          <div class="kcard red" id="kc-zb">
+            <span class="term">zip bomb</span>
+            <span class="def">A tiny archive claiming to decompress huge. Checked before a byte is extracted.</span>
+          </div>
+          <div class="kcard" id="kc-ratio">
+            <span class="term">compression ratio</span>
+            <span class="def">Compressed vs uncompressed size — far above 200× is bomb-shaped.</span>
+          </div>
+          <div class="kcard" id="kc-slip">
+            <span class="term">zip-slip</span>
+            <span class="def">Archive entry paths that escape the working directory — blocked by validation.</span>
+          </div>
+          <div class="kcard" id="kc-entity">
+            <span class="term">XML entity bomb</span>
+            <span class="def">Nested entity definitions (“billion laughs”) that explode on parse.</span>
+          </div>
+          <div class="kcard green" id="kc-batch">
+            <span class="term">batch processing</span>
+            <span class="def">Forty decks in one run — one poisoned file must not kill it.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">09 · hostile decks</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 10 : the numbers (296.186 – 328.461) ============ -->
+  <section id="s10" class="clip" data-start="296.186" data-duration="32.275">
+    <div class="scene-inner" id="s10-inner">
+      <div class="board">
+        <div class="main">
+          <h1>Measured, not claimed<span class="u cyan" id="s10-u"></span></h1>
+          <div id="s10-grid">
+            <div class="stat" id="st-a"><span class="n gold" id="n-a">0</span><span class="t">tests</span><span class="w">theme · mapping · idempotence · fit · safety · API · CLI</span></div>
+            <div class="stat" id="st-b"><span class="n" id="n-b">0</span><span class="t">audited changes</span><span class="w">the committed demo deck’s receipt</span></div>
+            <div class="stat" id="st-c"><span class="n" id="n-c">0</span><span class="t">fidelity losses</span><span class="w">charts, tables, groups, image bytes — identical</span></div>
+            <div class="stat" id="st-d"><span class="n" id="n-d">0</span><span class="t">color remaps</span><span class="w">hand-painted hexes, mapped in Lab</span></div>
+            <div class="stat" id="st-e"><span class="n" id="n-e">0</span><span class="t">font roles</span><span class="w">heading/body detected, latin + ea + cs</span></div>
+            <div class="stat" id="st-f"><span class="n" id="n-f">0</span><span class="t">theme slots</span><span class="w">clrScheme + fontScheme rewritten</span></div>
+          </div>
+          <div id="s10-note">fidelity sentinels: a chart, a table, a group and a picture are planted in a fixture deck — the tests assert the counts, and the image bytes, survive the morph. One wrap-off bleed was caught and flagged.</div>
+        </div>
+        <div class="rail">
+          <div class="kcard" id="kc-fit2">
+            <span class="term">fidelity test</span>
+            <span class="def">Asserts shape/table/chart counts and image hashes are identical before and after.</span>
+          </div>
+          <div class="kcard" id="kc-fixture">
+            <span class="term">fixture deck</span>
+            <span class="def">Synthetic decks built in-test: theme-referenced, hard-coded, mixed, overflow-prone.</span>
+          </div>
+          <div class="kcard gold" id="kc-43">
+            <span class="term">43 tests</span>
+            <span class="def">The offline suite — seconds to run, every promise in this lecture covered.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">10 · the numbers</div>
+    </div>
+  </section>
+
+  <!-- ============ SCENE 11 : recap (328.461 – end) ============ -->
+  <section id="s11" class="clip" data-start="328.461" data-duration="37.054">
+    <div class="scene-inner" id="s11-inner">
+      <div class="board">
+        <div class="main">
+          <h1>The 30-second recap<span class="u" id="s11-u"></span></h1>
+          <div id="s11-list">
+            <div class="r11" id="r11a"><span class="dot">1</span><span>A deck is a ZIP of XML — colors hide in the theme (the paint tin) and in hand-painted hexes.</span></div>
+            <div class="r11" id="r11b"><span class="dot">2</span><span>V1 rebuilt decks and destroyed them. V2 transforms in place — the deck is the substrate.</span></div>
+            <div class="r11" id="r11c"><span class="dot">3</span><span>Mapping is role-preserving, measured in Lab with ΔE — red text stays text.</span></div>
+            <div class="r11" id="r11d"><span class="dot">4</span><span>The fit guard keeps text in its box: shrink first, flag what it can’t fix.</span></div>
+            <div class="r11" id="r11e"><span class="dot">5</span><span>Running it twice changes nothing — the ΔE&lt;8 band. Every change lands in the receipt.</span></div>
+            <div class="r11" id="r11f"><span class="dot">6</span><span>Zip bombs, zip-slip, entity bombs — stopped at the door. 43 tests; 65 audited changes.</span></div>
+          </div>
+          <div id="s11-end">
+            <span class="big">BrandMorph — the robot that re-skins decks, in place.</span>
+            <span class="small">Now explain it to someone else.</span>
+          </div>
+        </div>
+        <div class="rail">
+          <div class="kcard" id="kc-learn">
+            <span class="term">study material</span>
+            <span class="def">GLOSSARY.md in the repo root — all 65 terms, plain English, “why it matters here” for each.</span>
+          </div>
+        </div>
+      </div>
+      <div class="scene-tag">11 · recap</div>
+    </div>
+  </section>
+
+  <!-- ================= AUDIO ================= -->
+  <!-- music bed: steady & clean, looped back-to-back, quiet under narration -->
+  <audio id="music-1" data-start="0" data-duration="117.384" data-track-index="10" data-volume="0.13" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"></audio>
+  <audio id="music-2" data-start="117.384" data-duration="117.384" data-track-index="10" data-volume="0.13" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"></audio>
+  <audio id="music-3" data-start="234.768" data-duration="117.384" data-track-index="10" data-volume="0.13" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"></audio>
+  <audio id="music-4" data-start="352.152" data-duration="13.363" data-track-index="10" data-volume="0.13" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"></audio>
+
+  <!-- narration: one WAV per scene, scene lengths derived from these -->
+  <audio id="vo-1" data-start="0.350" data-duration="30.458" data-track-index="3" data-volume="1" src="assets/voiceover/voice_01.wav"></audio>
+  <audio id="vo-2" data-start="31.708" data-duration="35.535" data-track-index="4" data-volume="1" src="assets/voiceover/voice_02.wav"></audio>
+  <audio id="vo-3" data-start="68.143" data-duration="37.882" data-track-index="5" data-volume="1" src="assets/voiceover/voice_03.wav"></audio>
+  <audio id="vo-4" data-start="106.925" data-duration="30.821" data-track-index="6" data-volume="1" src="assets/voiceover/voice_04.wav"></audio>
+  <audio id="vo-5" data-start="138.646" data-duration="34.618" data-track-index="7" data-volume="1" src="assets/voiceover/voice_05.wav"></audio>
+  <audio id="vo-6" data-start="174.164" data-duration="33.466" data-track-index="8" data-volume="1" src="assets/voiceover/voice_06.wav"></audio>
+  <audio id="vo-7" data-start="208.530" data-duration="22.400" data-track-index="9" data-volume="1" src="assets/voiceover/voice_07.wav"></audio>
+  <audio id="vo-8" data-start="231.830" data-duration="26.347" data-track-index="11" data-volume="1" src="assets/voiceover/voice_08.wav"></audio>
+  <audio id="vo-9" data-start="259.077" data-duration="36.559" data-track-index="12" data-volume="1" src="assets/voiceover/voice_09.wav"></audio>
+  <audio id="vo-10" data-start="296.536" data-duration="31.375" data-track-index="13" data-volume="1" src="assets/voiceover/voice_10.wav"></audio>
+  <audio id="vo-11" data-start="328.811" data-duration="36.154" data-track-index="14" data-volume="1" src="assets/voiceover/voice_11.wav"></audio>
+
+  <!-- sparse SFX -->
+  <audio id="sfx-1" data-start="1.800" data-duration="0.11" data-track-index="15" data-volume="0.5" src="assets/sfx/interface/drop_001.ogg"></audio>
+  <audio id="sfx-2" data-start="80.793" data-duration="0.12" data-track-index="16" data-volume="0.55" src="assets/sfx/impact/impactSoft_medium_000.ogg"></audio>
+  <audio id="sfx-3" data-start="298.986" data-duration="0.14" data-track-index="17" data-volume="0.55" src="assets/sfx/impact/impactSoft_medium_002.ogg"></audio>
+  <audio id="sfx-4" data-start="364.015" data-duration="0.11" data-track-index="18" data-volume="0.4" src="assets/sfx/interface/drop_001.ogg"></audio>
+</div>
+
+<script>
+  // Scene timing constants (derived from measured voiceover WAV durations)
+  const S1 = 0, S2 = 31.358, S3 = 67.793, S4 = 106.575, S5 = 138.296,
+        S6 = 173.814, S7 = 208.180, S8 = 231.480, S9 = 258.727, S10 = 296.186,
+        S11 = 328.461;
+  const END = 365.515;
+
+  const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
+
+  // helpers (all on inner wrappers — never on .clip elements)
+  const IN = (sel, at, dy = 18, dur = 0.55) =>
+    tl.fromTo(sel, { opacity: 0, y: dy }, { opacity: 1, y: 0, duration: dur }, at);
+  const SC = (sel, at, dur = 0.6) =>
+    tl.fromTo(sel, { scaleX: 0, transformOrigin: "left center" }, { scaleX: 1, duration: dur }, at);
+  const OUT = (sel, at) => tl.to(sel, { opacity: 0, duration: 0.45, ease: "power1.in" }, at);
+
+  // ---- Scene 1 (0 – S2) ---------------------------------------------------
+  IN("#s1-inner > .board > .main > h1", 0.15, 24, 0.7);
+  SC("#s1-u", 0.7);
+  IN("#s1-memo", 2.0);
+  IN("#s1-count", 6.5, 20, 0.6);
+  const cnt1 = { v: 0 };
+  tl.fromTo(cnt1, { v: 0 }, { v: 40, duration: 1.8, ease: "power1.out", onUpdate: () => {
+      document.getElementById("s1-num").textContent = Math.round(cnt1.v);
+    } }, 7.1);
+  IN("#kc-rebrand", 8.5);
+  IN("#s1-chart", 14.5);
+  IN("#kc-bm", 21.5);
+  IN("#kc-pptx1", 25.0);
+  OUT("#s1-inner", S2 - 0.55);
+
+  // ---- Scene 2 (S2 – S3) ---------------------------------------------------
+  IN("#s2-inner > .board > .main > h1", S2 + 0.15, 22, 0.6);
+  SC("#s2-u", S2 + 0.6);
+  IN("#s2-in", S2 + 3.0);
+  IN("#s2-arrow", S2 + 7.0, 12, 0.5);
+  IN("#s2-out", S2 + 10.0);
+  IN("#s2-out .generic", S2 + 12.0, 10, 0.35);
+  IN("#s2-out .generic:nth-child(3)", S2 + 12.5, 10, 0.35);
+  IN("#s2-out .generic:nth-child(4)", S2 + 13.0, 10, 0.35);
+  IN("#kc-rb", S2 + 14.5);
+  tl.fromTo("#s2-stamp", { opacity: 0, y: 10, rotation: -3, scale: 1.3 }, { opacity: 1, y: 0, rotation: -3, scale: 1, duration: 0.45 }, S2 + 19.0);
+  IN("#s2-substrate", S2 + 23.5);
+  IN("#kc-fid", S2 + 28.0);
+  IN("#kc-master", S2 + 31.0);
+  OUT("#s2-inner", S3 - 0.55);
+
+  // ---- Scene 3 (S3 – S4) ---------------------------------------------------
+  IN("#s3-inner > .board > .main > h1", S3 + 0.15, 22, 0.6);
+  SC("#s3-u", S3 + 0.6);
+  IN("#s3-tin", S3 + 3.2);
+  IN("#kc-ooxml", S3 + 5.5);
+  ["#rf1", "#rf2", "#rf3"].forEach((sel, i) => IN(sel, S3 + 6.0 + i * 0.9, 14, 0.45));
+  IN("#kc-theme", S3 + 9.5);
+  IN("#kc-clr", S3 + 12.0);
+  IN("#s3-hand", S3 + 14.0);
+  ["#hh1", "#hh2", "#hh3"].forEach((sel, i) => IN(sel, S3 + 15.0 + i * 0.8, 12, 0.4));
+  IN("#kc-srgb", S3 + 17.5);
+  IN("#act1", S3 + 21.5);
+  IN("#kc-tools", S3 + 24.0);
+  IN("#act2", S3 + 28.5);
+  IN("#s3-keep", S3 + 32.5, 12, 0.5);
+  OUT("#s3-inner", S4 - 0.55);
+
+  // ---- Scene 4 (S4 – S5) ---------------------------------------------------
+  IN("#s4-inner > .board > .main > h1", S4 + 0.15, 22, 0.6);
+  SC("#s4-u", S4 + 0.6);
+  IN("#sw-navy", S4 + 4.0);
+  IN("#sw-black", S4 + 5.0);
+  IN("#kc-rgb", S4 + 6.0);
+  IN("#s4-verdict", S4 + 9.0);
+  IN("#s4-lab", S4 + 15.5);
+  IN("#kc-lab", S4 + 17.5);
+  IN("#kc-de", S4 + 21.5);
+  IN("#s4-demorow", S4 + 25.5);
+  IN("#kc-perc", S4 + 28.0);
+  OUT("#s4-inner", S5 - 0.55);
+
+  // ---- Scene 5 (S5 – S6) ---------------------------------------------------
+  IN("#s5-inner > .board > .main > h1", S5 + 0.15, 22, 0.6);
+  SC("#s5-u", S5 + 0.6);
+  IN("#mr1", S5 + 4.0);
+  IN("#kc-rpm", S5 + 5.0);
+  IN("#mr2", S5 + 8.0);
+  IN("#kc-rc", S5 + 9.5);
+  IN("#mr3", S5 + 12.0);
+  IN("#kc-hue", S5 + 22.5);
+  IN("#s5-rule", S5 + 18.5);
+  IN("#s5-log", S5 + 29.5, 12, 0.45);
+  IN("#kc-cl2", S5 + 31.0);
+  OUT("#s5-inner", S6 - 0.55);
+
+  // ---- Scene 6 (S6 – S7) ---------------------------------------------------
+  IN("#s6-inner > .board > .main > h1", S6 + 0.15, 22, 0.6);
+  SC("#s6-u", S6 + 0.6);
+  IN("#s6-box", S6 + 3.0);
+  IN("#s6-overflow", S6 + 6.0, 8, 0.4);
+  IN("#kc-fit", S6 + 6.5);
+  IN("#kc-pil", S6 + 9.0);
+  IN("#kc-wrap", S6 + 11.0);
+  IN("#st6a", S6 + 13.5, 12, 0.4);
+  IN("#st6b", S6 + 16.0, 12, 0.4);
+  IN("#kc-ladder", S6 + 16.5);
+  IN("#st6c", S6 + 18.0, 12, 0.4);
+  IN("#st6d", S6 + 21.5, 12, 0.4);
+  IN("#s6-bleed", S6 + 25.5);
+  IN("#kc-bleed", S6 + 28.5);
+  OUT("#s6-inner", S7 - 0.55);
+
+  // ---- Scene 7 (S7 – S8) ---------------------------------------------------
+  IN("#s7-inner > .board > .main > h1", S7 + 0.15, 22, 0.6);
+  SC("#s7-u", S7 + 0.6);
+  IN("#dc1", S7 + 2.0);
+  IN("#rp1", S7 + 3.5, 12, 0.45);
+  IN("#dc2", S7 + 4.5);
+  IN("#rp2", S7 + 6.5, 12, 0.45);
+  tl.fromTo("#zc1", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.5 }, S7 + 8.0);
+  IN("#kc-idem", S7 + 8.5);
+  IN("#ring7", S7 + 10.5, 16, 0.5);
+  IN("#s7-band .txt", S7 + 11.5);
+  IN("#kc-band", S7 + 13.5);
+  IN("#s7-hash", S7 + 18.0, 12, 0.45);
+  IN("#kc-hash", S7 + 19.5);
+  OUT("#s7-inner", S8 - 0.55);
+
+  // ---- Scene 8 (S8 – S9) ---------------------------------------------------
+  IN("#s8-inner > .board > .main > h1", S8 + 0.15, 22, 0.6);
+  SC("#s8-u", S8 + 0.6);
+  IN("#s8-receipt", S8 + 4.5);
+  ["#rr1", "#rr2", "#rr3", "#rr4"].forEach((sel, i) => IN(sel, S8 + 6.0 + i * 1.0, 8, 0.4));
+  IN("#kc-report", S8 + 8.0);
+  IN("#bd2", S8 + 14.5);
+  IN("#kc-flag", S8 + 15.5);
+  IN("#bd1", S8 + 17.5);
+  IN("#kc-dry", S8 + 19.0);
+  IN("#tot8", S8 + 22.0, 14, 0.5);
+  IN("#tot8b", S8 + 23.0, 14, 0.5);
+  OUT("#s8-inner", S9 - 0.55);
+
+  // ---- Scene 9 (S9 – S10) ---------------------------------------------------
+  IN("#s9-inner > .board > .main > h1", S9 + 0.15, 22, 0.6);
+  SC("#s9-u", S9 + 0.6);
+  IN("#d9a", S9 + 4.0);
+  IN("#kc-zb", S9 + 5.5);
+  IN("#kc-ratio", S9 + 9.0);
+  IN("#d9b", S9 + 12.5);
+  IN("#kc-slip", S9 + 14.5);
+  IN("#d9c", S9 + 17.5);
+  IN("#kc-entity", S9 + 20.5);
+  IN("#p9a", S9 + 26.0, 12, 0.45);
+  IN("#p9b", S9 + 28.0, 12, 0.45);
+  IN("#kc-batch", S9 + 29.5);
+  OUT("#s9-inner", S10 - 0.55);
+
+  // ---- Scene 10 (S10 – S11) ---------------------------------------------------
+  IN("#s10-inner > .board > .main > h1", S10 + 0.15, 22, 0.6);
+  SC("#s10-u", S10 + 0.6);
+  const stats = [
+    ["#st-a", "#n-a", 43, "0"],
+    ["#st-b", "#n-b", 65, "0"],
+    ["#st-c", "#n-c", 0, "0"],
+    ["#st-d", "#n-d", 18, "0"],
+    ["#st-e", "#n-e", 29, "0"],
+    ["#st-f", "#n-f", 18, "0"]
+  ];
+  stats.forEach(([tile, num, val, fmt], i) => {
+    const at = S10 + 3.0 + i * 1.2;
+    IN(tile, at, 14, 0.4);
+    const obj = { v: 0 };
+    tl.fromTo(obj, { v: 0 }, {
+      v: val, duration: 1.1, ease: "power1.out",
+      onUpdate: () => { document.querySelector(num).textContent = Math.round(obj.v); }
+    }, at + 0.15);
+  });
+  IN("#kc-43", S10 + 4.5);
+  IN("#s10-note", S10 + 14.0, 12, 0.45);
+  IN("#kc-fit2", S10 + 16.0);
+  IN("#kc-fixture", S10 + 18.0);
+  OUT("#s10-inner", S11 - 0.55);
+
+  // ---- Scene 11 (S11 – end) ---------------------------------------------------
+  IN("#s11-inner > .board > .main > h1", S11 + 0.15, 22, 0.6);
+  SC("#s11-u", S11 + 0.6);
+  ["#r11a", "#r11b", "#r11c", "#r11d", "#r11e", "#r11f"].forEach((sel, i) => IN(sel, S11 + 2.0 + i * 2.6, 12, 0.45));
+  IN("#s11-end", S11 + 28.0, 16, 0.8);
+  IN("#kc-learn", S11 + 31.0);
+
+  window.__timelines["brandmorph-lecture"] = tl;
+</script>
+</body>
+</html>
