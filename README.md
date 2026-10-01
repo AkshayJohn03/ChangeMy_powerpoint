@@ -1,5 +1,8 @@
 # BrandMorph — PowerPoint, rebuilt as code
 
+[![▶ whiteboard explainer video · 6m05s](https://img.shields.io/badge/%E2%96%B6_whiteboard_explainer-6m05s-E8B44A?style=flat-square&logo=googleplay&logoColor=white)](brag-output/brag.mp4)
+
+
 **Akshay John Xavier — 8y Creative Technologist (Lead Executive, Akkodis)**
 > Enterprise pursuit decks that used to take 40 hrs in PowerPoint, now generated from tokens → code in 45 seconds. No manual design.
 
