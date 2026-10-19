@@ -152,7 +152,7 @@ export default function StudioWorkspace() {
   const loadTestPPT = async () => {
     setIsProcessing(true);
     try {
-      const res = await fetch('http://localhost:8000/api/parse_test_ppt');
+      const res = await fetch('/api/demo_ast').catch(() => fetch('http://localhost:8000/api/demo_ast'));
       const data = await res.json();
       if (data.status === 'success' && data.slides.length > 0) {
         setSlides(data.slides);

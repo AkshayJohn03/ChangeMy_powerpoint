@@ -144,10 +144,22 @@ class SlideDecompiler:
             base_data["shape_name"] = shape_enum_str
             return base_data
 
-        # 4. Lines and Connectors
-        elif shape.shape_type in (MSO_SHAPE_TYPE.LINE, MSO_SHAPE_TYPE.CONNECTOR):
+        # 4. Lines
+        elif shape.shape_type == MSO_SHAPE_TYPE.LINE:
             base_data["type"] = "LINE_SHAPE"
             base_data["shape_name"] = "CONNECTOR_LINE"
+            return base_data
+
+        # 5. Tables
+        elif shape.shape_type == MSO_SHAPE_TYPE.TABLE:
+            base_data["type"] = "TABLE"
+            base_data["shape_name"] = "TABLE_SHAPE"
+            return base_data
+
+        # 6. Charts
+        elif shape.shape_type == MSO_SHAPE_TYPE.CHART:
+            base_data["type"] = "CHART"
+            base_data["shape_name"] = "CHART_SHAPE"
             return base_data
 
         return None

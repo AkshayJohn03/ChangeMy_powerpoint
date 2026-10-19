@@ -2206,13 +2206,13 @@ def build_slide_8():
 
     # Diagram nodes
     draw_card(9.35, 5.05, 0.9, 0.45, CARD_BG, BORDER_BLUE)
-    add_text_box(9.35, 5.1, 0.9, 0.35, [{"text": "VW Group\nGlobal Teams", "bold": True, "size": 7, "color": WHITE}], PP_ALIGN.CENTER)
+    add_text_box(9.35, 5.1, 0.9, 0.35, [{"text": "Automotive OEM\nGlobal Teams", "bold": True, "size": 7, "color": WHITE}], PP_ALIGN.CENTER)
     
     draw_connector_line(10.3, 5.25, 0.2, 0.02, CYAN)
     draw_connector_line(11.5, 5.25, 0.2, 0.02, CYAN)
     
     draw_card(10.55, 5.0, 0.9, 0.55, RGBColor(12, 35, 75), GOLD)
-    add_text_box(10.55, 5.05, 0.9, 0.45, [{"text": "BrandMorph Delivery\nODC Pune", "bold": True, "size": 7.5, "color": GOLD}], PP_ALIGN.CENTER)
+    add_text_box(10.55, 5.05, 0.9, 0.45, [{"text": "Global Delivery\nODC Pune", "bold": True, "size": 7.5, "color": GOLD}], PP_ALIGN.CENTER)
     
     draw_card(11.75, 5.05, 0.9, 0.45, CARD_BG, BORDER_BLUE)
     add_text_box(11.75, 5.1, 0.9, 0.35, [{"text": "Other WW\nLocations", "bold": True, "size": 7, "color": WHITE}], PP_ALIGN.CENTER)

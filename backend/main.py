@@ -84,7 +84,12 @@ async def parse_deck(file: UploadFile = File(...)):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "engine": "brandmorph", "version": brandmorph_version}
+
 @app.get("/api/demo_ast")
+@app.get("/api/parse_test_ppt")
 async def demo_ast():
     """Parse the bundled sample deck; no user data needed."""
     samples_dir = os.path.join(os.path.dirname(__file__), "samples")
