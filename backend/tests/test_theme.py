@@ -10,12 +10,12 @@ def _theme_xml(path):
         return z.read("ppt/theme/theme1.xml").decode("utf-8")
 
 
-def test_theme_scheme_rewritten(tmp_path, akkodis):
+def test_theme_scheme_rewritten(tmp_path, enterprise_navy):
     from conftest import build_themed
 
     src = build_themed(tmp_path / "themed.pptx")
     out = tmp_path / "out.pptx"
-    report = MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    report = MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     xml = _theme_xml(out)
     assert "FFB81C" in xml, "accent1 slot should carry the brand gold"
@@ -39,12 +39,12 @@ def test_theme_fonts_replaced(tmp_path, corporate_light):
     assert 'typeface="Calibri"' in xml  # corporate_light body
 
 
-def test_theme_idempotent(tmp_path, akkodis):
+def test_theme_idempotent(tmp_path, enterprise_navy):
     from conftest import build_themed
 
     src = build_themed(tmp_path / "themed.pptx")
     out1 = tmp_path / "pass1.pptx"
     out2 = tmp_path / "pass2.pptx"
-    MorphPipeline(akkodis, options=MorphOptions()).run(src, out1)
-    report2 = MorphPipeline(akkodis, options=MorphOptions()).run(out1, out2)
+    MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out1)
+    report2 = MorphPipeline(enterprise_navy, options=MorphOptions()).run(out1, out2)
     assert report2.counts_by_stage.get("theme", 0) == 0

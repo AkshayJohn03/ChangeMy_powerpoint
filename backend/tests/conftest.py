@@ -31,8 +31,8 @@ SLIDE_W, SLIDE_H = Inches(13.333), Inches(7.5)
 
 
 @pytest.fixture(scope="session")
-def akkodis() -> BrandDNA:
-    return BrandDNA.load("akkodis")
+def enterprise_navy() -> BrandDNA:
+    return BrandDNA.load("enterprise_navy")
 
 
 @pytest.fixture(scope="session")

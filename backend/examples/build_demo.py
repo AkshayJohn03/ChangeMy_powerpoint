@@ -4,8 +4,8 @@ Run from backend/:  python examples/build_demo.py
 
 Creates examples/demo_raw.pptx (a deterministically "off-brand" 3-slide deck:
 generic corporate blue, mismatched fonts, hand-painted colors, a chart, a
-table and a grouped shape), then applies the Akkodis brand in place and
-writes examples/demo_akkodis_branded.pptx + examples/report/morph_report.md.
+table and a grouped shape), then applies the Enterprise Navy brand in place and
+writes examples/demo_branded.pptx + examples/report/morph_report.md.
 The branded output is committed so reviewers can open both decks side by side.
 """
 
@@ -127,12 +127,12 @@ def build_demo(path: Path) -> None:
 
 def main() -> int:
     raw = EXAMPLES / "demo_raw.pptx"
-    branded = EXAMPLES / "demo_akkodis_branded.pptx"
+    branded = EXAMPLES / "demo_branded.pptx"
     report_dir = EXAMPLES / "report"
     if not raw.exists():
         build_demo(raw)
         print(f"built {raw.name}")
-    dna = BrandDNA.load("akkodis")
+    dna = BrandDNA.load("enterprise_navy")
     pipeline = MorphPipeline(dna, options=MorphOptions())
     report: MorphReport = pipeline.run(raw, branded, report_dir=str(report_dir))
     before, after = analyze(raw), analyze(branded)

@@ -1,7 +1,7 @@
 # BrandMorph morph report
 
 - **Source deck:** `D:\aria\Projects\BrandMorph\backend\examples\demo_raw.pptx`
-- **Brand:** Akkodis Dark
+- **Brand:** Enterprise Navy
 - **Dry run:** False
 - **Total changes:** 65
 - **Idempotence hash:** `1ba07f2f07b9d251`

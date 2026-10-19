@@ -5,12 +5,12 @@ from brandmorph.engine.analyzer import analyze
 from brandmorph.engine.pipeline import MorphOptions, MorphPipeline
 
 
-def test_mixed_deck_content_preserved(tmp_path, akkodis):
+def test_mixed_deck_content_preserved(tmp_path, enterprise_navy):
     from conftest import build_mixed
 
     src = build_mixed(tmp_path / "mixed.pptx")
     out = tmp_path / "out.pptx"
-    MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     before, after = analyze(src), analyze(out)
     assert before["slide_count"] == after["slide_count"]
@@ -22,17 +22,17 @@ def test_mixed_deck_content_preserved(tmp_path, akkodis):
         assert before["image_hashes"] == after["image_hashes"]
 
 
-def test_chart_series_recolored(tmp_path, akkodis):
+def test_chart_series_recolored(tmp_path, enterprise_navy):
     from conftest import build_mixed
 
     from brandmorph.brand.profile import PALETTE_ROLES
 
     src = build_mixed(tmp_path / "mixed.pptx")
     out = tmp_path / "out.pptx"
-    report = MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    report = MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     palette_hexes = {
-        getattr(akkodis.palette, role).hex for role in PALETTE_ROLES
+        getattr(enterprise_navy.palette, role).hex for role in PALETTE_ROLES
     }
     chart_entries = [e for e in report.entries if "chart" in e.element]
     assert chart_entries, "explicit chart colors must be mapped"
@@ -40,25 +40,25 @@ def test_chart_series_recolored(tmp_path, akkodis):
         assert e.after in palette_hexes
 
 
-def test_table_cell_recolored(tmp_path, akkodis):
+def test_table_cell_recolored(tmp_path, enterprise_navy):
     from conftest import build_mixed
 
     src = build_mixed(tmp_path / "mixed.pptx")
     out = tmp_path / "out.pptx"
-    report = MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    report = MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     cell_entries = [e for e in report.entries if e.role in ("surface", "surface_alt", "background")]
     assert cell_entries, "explicit table-cell fill must be mapped to a surface role"
 
 
-def test_grouped_shapes_survive(tmp_path, akkodis):
+def test_grouped_shapes_survive(tmp_path, enterprise_navy):
     from conftest import build_mixed
     from pptx import Presentation
     from pptx.enum.shapes import MSO_SHAPE_TYPE
 
     src = build_mixed(tmp_path / "mixed.pptx")
     out = tmp_path / "out.pptx"
-    MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     prs = Presentation(str(out))
     groups = [

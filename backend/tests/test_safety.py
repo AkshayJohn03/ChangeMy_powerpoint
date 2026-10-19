@@ -102,7 +102,7 @@ def test_pipeline_rejects_hostile_deck(tmp_path):
 def _brand():
     from brandmorph.brand.profile import BrandDNA
 
-    return BrandDNA.load("akkodis")
+    return BrandDNA.load("enterprise_navy")
 
 
 def test_api_upload_cap(tmp_path, monkeypatch):

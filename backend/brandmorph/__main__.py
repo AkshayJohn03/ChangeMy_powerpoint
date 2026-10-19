@@ -1,7 +1,7 @@
-"""CLI entry: `python -m brandmorph apply --deck deck.pptx --brand akkodis --out out.pptx`.
+"""CLI entry: `python -m brandmorph apply --deck deck.pptx --brand enterprise_navy --out out.pptx`.
 
 Batch mode (scalability): pass multiple decks or a glob and `--out` becomes a
-directory — `python -m brandmorph apply --deck "decks/*.pptx" --brand akkodis
+directory - `python -m brandmorph apply --deck "decks/*.pptx" --brand enterprise_navy
 --out branded/`. One hostile or corrupt deck fails alone; the batch continues
 and a summary table prints at the end.
 """

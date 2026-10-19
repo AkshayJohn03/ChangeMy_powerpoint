@@ -21,7 +21,7 @@ def _runs(path):
     return out
 
 
-def test_white_on_dark_is_perceptually_brand_and_left_alone(tmp_path, akkodis):
+def test_white_on_dark_is_perceptually_brand_and_left_alone(tmp_path, enterprise_navy):
     """Brand text_primary (F2F6FC) is dE 4.7 from pure white — inside the
     idempotence band, so white ink on a dark deck is correctly treated as
     already-on-brand and left untouched (perceptual mapping, not literal)."""
@@ -29,18 +29,18 @@ def test_white_on_dark_is_perceptually_brand_and_left_alone(tmp_path, akkodis):
 
     src = build_hardcoded(tmp_path / "deck.pptx")
     out = tmp_path / "out.pptx"
-    MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     colors = dict(_runs(out))
     assert colors["Quarterly Business Review"] == "FFFFFF"
 
 
-def test_dim_gray_maps_to_text_muted(tmp_path, akkodis):
+def test_dim_gray_maps_to_text_muted(tmp_path, enterprise_navy):
     from conftest import build_hardcoded
 
     src = build_hardcoded(tmp_path / "deck.pptx")
     out = tmp_path / "out.pptx"
-    report = MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    report = MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     colors = dict(_runs(out))
     assert colors["Footer note, low emphasis"] == "93A5C4"
@@ -48,45 +48,45 @@ def test_dim_gray_maps_to_text_muted(tmp_path, akkodis):
     assert entry.stage == "format"
 
 
-def test_red_maps_to_danger_not_random(tmp_path, akkodis):
+def test_red_maps_to_danger_not_random(tmp_path, enterprise_navy):
     from conftest import build_hardcoded
 
     src = build_hardcoded(tmp_path / "deck.pptx")
     out = tmp_path / "out.pptx"
-    MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     colors = dict(_runs(out))
     assert colors["Margin alert"] == "E5484D"
 
 
-def test_already_brand_color_untouched(tmp_path, akkodis):
+def test_already_brand_color_untouched(tmp_path, enterprise_navy):
     from conftest import build_hardcoded
 
     src = build_hardcoded(tmp_path / "deck.pptx")
     out = tmp_path / "out.pptx"
-    MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     colors = dict(_runs(out))
     assert colors["Already on brand"] == "FFB81C"
 
 
-def test_mapping_idempotent(tmp_path, akkodis):
+def test_mapping_idempotent(tmp_path, enterprise_navy):
     from conftest import build_hardcoded
 
     src = build_hardcoded(tmp_path / "deck.pptx")
     out1 = tmp_path / "pass1.pptx"
     out2 = tmp_path / "pass2.pptx"
-    MorphPipeline(akkodis, options=MorphOptions()).run(src, out1)
-    report2 = MorphPipeline(akkodis, options=MorphOptions()).run(out1, out2)
+    MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out1)
+    report2 = MorphPipeline(enterprise_navy, options=MorphOptions()).run(out1, out2)
     assert report2.counts_by_stage.get("format", 0) == 0
 
 
-def test_glossary_and_banned_words(tmp_path, akkodis):
+def test_glossary_and_banned_words(tmp_path, enterprise_navy):
     from conftest import build_hardcoded
 
     src = build_hardcoded(tmp_path / "deck.pptx")
     out = tmp_path / "out.pptx"
-    report = MorphPipeline(akkodis, options=MorphOptions()).run(src, out)
+    report = MorphPipeline(enterprise_navy, options=MorphOptions()).run(src, out)
 
     texts = [t for t, _ in _runs(out)]
     assert any("Utilize" not in t and "use new tooling" in t for t in texts), \
@@ -94,12 +94,12 @@ def test_glossary_and_banned_words(tmp_path, akkodis):
     assert any("cheap" not in t for t in texts)  # no banned word introduced
 
 
-def test_dry_run_produces_plan_only(tmp_path, akkodis):
+def test_dry_run_produces_plan_only(tmp_path, enterprise_navy):
     from conftest import build_hardcoded
 
     src = build_hardcoded(tmp_path / "deck.pptx")
     missing = tmp_path / "should_not_exist.pptx"
-    report = MorphPipeline(akkodis, options=MorphOptions(dry_run=True)).run(
+    report = MorphPipeline(enterprise_navy, options=MorphOptions(dry_run=True)).run(
         src, missing
     )
     assert not missing.exists()

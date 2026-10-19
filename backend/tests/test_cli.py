@@ -6,7 +6,7 @@ import sys
 BACKEND = __import__("pathlib").Path(__file__).resolve().parents[1]
 
 
-def test_cli_apply_end_to_end(tmp_path, akkodis):
+def test_cli_apply_end_to_end(tmp_path, enterprise_navy):
     from conftest import build_hardcoded
 
     src = build_hardcoded(tmp_path / "deck.pptx")
@@ -16,7 +16,7 @@ def test_cli_apply_end_to_end(tmp_path, akkodis):
     proc = subprocess.run(
         [
             sys.executable, "-m", "brandmorph", "apply",
-            "--deck", str(src), "--brand", "akkodis",
+            "--deck", str(src), "--brand", "enterprise_navy",
             "--out", str(out), "--report", str(report_dir),
         ],
         cwd=str(BACKEND), capture_output=True, text=True, timeout=180,

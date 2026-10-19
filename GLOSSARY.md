@@ -189,7 +189,7 @@ The validated brand profile (`BrandDNA` pydantic model): palette with semantic r
 *Why it matters here: it's the single source of truth every stage reads — and the thing v1's four hardcoded JSON keys could never express.*
 
 **YAML profile**
-A brand recipe written as human-editable YAML (see `brands/akkodis.yaml`): colors with usage notes, fonts, voice, glossary.
+A brand recipe written as human-editable YAML (see `brands/enterprise_navy.yaml`): colors with usage notes, fonts, voice, glossary.
 *Why it matters here: a designer can read and edit it without touching code — the input the product premise always promised.*
 
 **Glossary enforcement**

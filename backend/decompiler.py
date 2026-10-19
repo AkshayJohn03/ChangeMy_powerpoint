@@ -1,13 +1,40 @@
 import pptx
 from pptx.enum.shapes import MSO_SHAPE_TYPE
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Generator, Tuple
 import base64
+
+# Minimum dimension in inches to avoid zero-division / negative-extent bugs
+_MIN_EXTENT = 0.05
+
 
 class SlideDecompiler:
     def __init__(self, pptx_path: str):
         self.prs = pptx.Presentation(pptx_path)
         self.slide_width = self.prs.slide_width.inches if self.prs.slide_width else 13.333
         self.slide_height = self.prs.slide_height.inches if self.prs.slide_height else 7.5
+
+    # --- Recursive group traversal -------------------------------------------
+    @staticmethod
+    def _iter_shapes(
+        shapes, parent_left: float = 0.0, parent_top: float = 0.0
+    ) -> Generator[Tuple[Any, float, float], None, None]:
+        """Yield (shape, offset_left, offset_top) recursively descending groups.
+
+        Enterprise decks heavily nest elements inside GroupShapes; a flat
+        iteration over slide.shapes silently drops those children.
+        """
+        for shape in shapes:
+            if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+                # Accumulate the group's own position as offset for children
+                grp_left = shape.left.inches if shape.left else 0.0
+                grp_top = shape.top.inches if shape.top else 0.0
+                yield from SlideDecompiler._iter_shapes(
+                    shape.shapes,
+                    parent_left + grp_left,
+                    parent_top + grp_top,
+                )
+            else:
+                yield shape, parent_left, parent_top
 
     def parse_deck(self) -> List[Dict[str, Any]]:
         parsed_slides = []
@@ -24,8 +51,8 @@ class SlideDecompiler:
             except Exception:
                 pass
 
-            for shape in slide.shapes:
-                node = self._extract_shape_data(shape)
+            for shape, off_left, off_top in self._iter_shapes(slide.shapes):
+                node = self._extract_shape_data(shape, off_left, off_top)
                 if node:
                     nodes.append(node)
                     if node.get("type") == "TEXT_CONTAINER" and node.get("paragraphs"):
@@ -46,11 +73,18 @@ class SlideDecompiler:
             
         return parsed_slides
 
-    def _extract_shape_data(self, shape) -> Dict[str, Any]:
-        left = shape.left.inches if shape.left else 0.5
-        top = shape.top.inches if shape.top else 0.5
-        width = shape.width.inches if shape.width else 2.0
-        height = shape.height.inches if shape.height else 1.0
+    def _extract_shape_data(
+        self, shape, offset_left: float = 0.0, offset_top: float = 0.0
+    ) -> Dict[str, Any]:
+        # Apply parent group offsets and clamp to safe minimums
+        left = (shape.left.inches if shape.left else 0.5) + offset_left
+        top = (shape.top.inches if shape.top else 0.5) + offset_top
+        width = max(_MIN_EXTENT, shape.width.inches if shape.width else 2.0)
+        height = max(_MIN_EXTENT, shape.height.inches if shape.height else 1.0)
+
+        # Normalize negative coordinates from flipped connectors
+        left = max(0.0, left)
+        top = max(0.0, top)
 
         base_data = {
             "id": shape.shape_id,
@@ -117,3 +151,4 @@ class SlideDecompiler:
             return base_data
 
         return None
+

@@ -9,6 +9,9 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ICONS_DIR = os.environ.get("BRANDMORPH_ICONS_DIR", os.path.join(BASE_DIR, "assets", "icons"))
+
 # Initialize presentation
 prs = Presentation()
 prs.slide_width = Inches(13.333)
@@ -308,7 +311,7 @@ def build_slide_2():
     
     rows_data = [
         ("TRAINING", "👨‍🏫", "Training ownership of Resource", "🎓 Focus on Skill Gaps & Continuous Learning Paths"),
-        ("BUSINESS FOCAL", "🎯", "Investment to onsite coordinator at RNTBCI Premises to support demands and facilitate collaboration", "🤝 Direct Stakeholder Alignment"),
+        ("BUSINESS FOCAL", "🎯", "Investment to onsite coordinator at Client Premises to support demands and facilitate collaboration", "🤝 Direct Stakeholder Alignment"),
         ("KPI MANAGEMENT", "📈", "Team & Individual KPI Management through monitoring and continuous improvement", "📊 Real-time Dashboard Monitoring"),
         ("BUFFER RESOURCE", "👥", "Create trained resource pool ready-to-onboard for new demands & replacements", "🔍 Cross-trained Standby Engineers"),
         ("DELIVERY MATURITY", "⏱️", "Demonstrate delivery excellence with required KPI and readiness to transition to managed services/Workpackage", "⚙️ Quality Process SLA Assurance")
@@ -375,7 +378,7 @@ def build_slide_2():
 def build_slide_3():
     slide = prs.slides.add_slide(blank_layout)
     set_slide_background(slide)
-    add_slide_title(slide, "RNTBCI - DEDICATED SPOC FOR SEAMLESS COORDINATION")
+    add_slide_title(slide, "ONSITE CLIENT COORDINATION - DEDICATED SPOC")
     
     # Subtitle
     sub_tb = slide.shapes.add_textbox(Inches(0.5), Inches(0.75), Inches(12.33), Inches(0.4))
@@ -397,7 +400,7 @@ def build_slide_3():
         ("Delivery Team", "Delivery Execution & Tracking", "🚚"),
         ("Quality Team", "Quality Assurance & Compliance", "🛡️"),
         ("PMO Team", "Planning, Tracking & Governance", "📋"),
-        ("Akkodis Team", "Engineering & Onsite Delivery", "👥")
+        ("Engineering Team", "Engineering & Onsite Delivery", "👥")
     ]
     
     for idx, (title, subtitle, icon) in enumerate(internal_teams):
@@ -434,7 +437,7 @@ def build_slide_3():
     tf_c = center_circle.text_frame
     tf_c.word_wrap = True
     p_c1 = tf_c.paragraphs[0]
-    p_c1.text = "👤\n\nDedicated\nAkkodis SPOC\nin RNTBCI"
+    p_c1.text = "👤\n\nDedicated\nDelivery SPOC\nin Global Alliance Hub"
     p_c1.font.bold = True
     p_c1.font.size = Pt(18)
     p_c1.font.color.rgb = WHITE
@@ -540,7 +543,7 @@ def build_slide_4():
     set_slide_background(slide)
     
     # 1. Title
-    add_slide_title(slide, "RNTBCI – PERFORMANCE SUMMARY & INSIGHTS")
+    add_slide_title(slide, "CLIENT PERFORMANCE SUMMARY & INSIGHTS")
     
     # Subtitle
     subBox = slide.shapes.add_textbox(Inches(0.5), Inches(0.7), Inches(9.0), Inches(0.4))
@@ -756,8 +759,8 @@ def build_slide_4():
     p_c2_t.font.color.rgb = WHITE
     
     challenges = [
-        "❌ Deployment delay to RNTBCI",
-        "❌ Training slot availability at RNTBCI",
+        "❌ Deployment delay to client site",
+        "❌ Training slot availability at client site",
         "❌ Purchase Order (PO) release delay",
         "❌ Timesheet submission tracking lag"
     ]
@@ -875,12 +878,12 @@ def build_slide_5():
 
     # --- CENTER GRID: 6 DOMAINS (WITH GENERATED IMAGES) ---
     grid_data = [
-        ("🚗 BIW", r"C:\Users\Akshay.JOHN-XAVIER\.gemini\antigravity-ide\brain\7c9e712e-098a-4195-a7c3-faa0bd382552\biw_chassis_frame_1784568686423.png", 3.15, 1.1),
-        ("🚗 EXTERIOR", r"C:\Users\Akshay.JOHN-XAVIER\.gemini\antigravity-ide\brain\7c9e712e-098a-4195-a7c3-faa0bd382552\car_exterior_side_1784568705359.png", 5.4, 1.1),
-        ("🛋️ INTERIOR", r"C:\Users\Akshay.JOHN-XAVIER\.gemini\antigravity-ide\brain\7c9e712e-098a-4195-a7c3-faa0bd382552\car_interior_cockpit_1784568728606.png", 7.65, 1.1),
-        ("💺 SEATING", r"C:\Users\Akshay.JOHN-XAVIER\.gemini\antigravity-ide\brain\7c9e712e-098a-4195-a7c3-faa0bd382552\car_sport_seats_1784568751946.png", 3.15, 3.0),
-        ("💡 LIGHTING", r"C:\Users\Akshay.JOHN-XAVIER\.gemini\antigravity-ide\brain\7c9e712e-098a-4195-a7c3-faa0bd382552\car_lighting_taillights_1784568772871.png", 5.4, 3.0),
-        ("🚗 CHASSIS", r"C:\Users\Akshay.JOHN-XAVIER\.gemini\antigravity-ide\brain\7c9e712e-098a-4195-a7c3-faa0bd382552\car_chassis_suspension_1784568794971.png", 7.65, 3.0)
+        ("🚗 BIW", os.path.join(ICONS_DIR, "biw_chassis_frame_1784568686423.png"), 3.15, 1.1),
+        ("🚗 EXTERIOR", os.path.join(ICONS_DIR, "car_exterior_side_1784568705359.png"), 5.4, 1.1),
+        ("🛋️ INTERIOR", os.path.join(ICONS_DIR, "car_interior_cockpit_1784568728606.png"), 7.65, 1.1),
+        ("💺 SEATING", os.path.join(ICONS_DIR, "car_sport_seats_1784568751946.png"), 3.15, 3.0),
+        ("💡 LIGHTING", os.path.join(ICONS_DIR, "car_lighting_taillights_1784568772871.png"), 5.4, 3.0),
+        ("🚗 CHASSIS", os.path.join(ICONS_DIR, "car_chassis_suspension_1784568794971.png"), 7.65, 3.0)
     ]
 
     for title, img_path, x, y in grid_data:
@@ -1008,12 +1011,12 @@ def build_slide_6():
     # 1. Slide Title
     add_slide_title(slide, "EXPECTED COMPETENCY & CAPACITY / SERVICE TIME ACCEPTANCE")
     
-    # 2. Akkodis White Logo (top right)
-    logo_path = r"c:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\Me\Redesign with Design System\Icons\logo_akkodis_white.png"
+    # 2. BrandMorph Delivery White Logo (top right)
+    logo_path = os.path.join(ICONS_DIR, "logo_partner_white.png")
     try:
         slide.shapes.add_picture(logo_path, Inches(10.8), Inches(0.2), Inches(2.0), Inches(0.4))
     except Exception as e:
-        print(f"Error adding logo: {e}")
+        pass
 
     # Theme colors reference
     # CARD_BG = RGBColor(8, 22, 50)
@@ -1031,7 +1034,7 @@ def build_slide_6():
         ("SERVICE EXCELLENCE", "icon_excellence.png", "Operational excellence with SLA & KPI focus")
     ]
     
-    icons_dir = r"c:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\Me\Redesign with Design System\Icons"
+    icons_dir = ICONS_DIR
     
     for idx, (title, icon_file, desc) in enumerate(sidebar_data):
         y = sidebar_y_coords[idx]
@@ -1048,7 +1051,7 @@ def build_slide_6():
             icon_path = os.path.join(icons_dir, icon_file)
             slide.shapes.add_picture(icon_path, Inches(0.55), Inches(y + 0.15), Inches(0.4), Inches(0.4))
         except Exception as e:
-            print(f"Error adding sidebar icon {icon_file}: {e}")
+            pass
             
         # Category Text Box
         tb = slide.shapes.add_textbox(Inches(1.0), Inches(y + 0.05), Inches(1.8), Inches(1.3))
@@ -1080,7 +1083,7 @@ def build_slide_6():
         icon_path = os.path.join(icons_dir, "icon_business_hours.png")
         slide.shapes.add_picture(icon_path, Inches(0.55), Inches(5.9), Inches(0.4), Inches(0.4))
     except Exception as e:
-        print(f"Error adding sidebar icon: {e}")
+        pass
         
     tb4 = slide.shapes.add_textbox(Inches(1.0), Inches(5.8), Inches(1.8), Inches(0.8))
     tf4 = tb4.text_frame
@@ -1127,7 +1130,7 @@ def build_slide_6():
             icon_path = os.path.join(icons_dir, icon_file)
             slide.shapes.add_picture(icon_path, Inches(cx + 0.12), Inches(cy + 0.15), Inches(0.45), Inches(0.45))
         except Exception as e:
-            print(f"Error adding card icon {icon_file}: {e}")
+            pass
             
         # Card Title Box
         tb_t = slide.shapes.add_textbox(Inches(cx + 0.65), Inches(cy + 0.1), Inches(1.7), Inches(0.45))
@@ -1313,7 +1316,7 @@ def build_slide_6():
             icon_path = os.path.join(icons_dir, sta_icon)
             slide.shapes.add_picture(icon_path, Inches(item_x), Inches(5.95), Inches(0.35), Inches(0.35))
         except Exception as e:
-            print(f"Error adding sta icon {sta_icon}: {e}")
+            pass
             
         # Add Textbox
         tb_s = slide.shapes.add_textbox(Inches(item_x + 0.38), Inches(5.8), Inches(0.98), Inches(0.8))
@@ -1348,7 +1351,7 @@ def build_slide_6():
         icon_path = os.path.join(icons_dir, "icon_target.png")
         slide.shapes.add_picture(icon_path, Inches(0.6), Inches(6.85), Inches(0.45), Inches(0.45))
     except Exception as e:
-        print(f"Error adding target icon: {e}")
+        pass
         
     # Textbox next to icon
     tb_b = slide.shapes.add_textbox(Inches(1.15), Inches(6.82), Inches(11.5), Inches(0.5))
@@ -1397,7 +1400,7 @@ def build_slide_6():
     run_main6.font.name = "Arial"
     
     run_main7 = p_b.add_run()
-    run_main7.text = " for Airbus Digital for Operations."
+    run_main7.text = " for Enterprise Digital Operations."
     run_main7.font.size = Pt(10.5)
     run_main7.font.color.rgb = WHITE
     run_main7.font.name = "Arial"
@@ -1462,15 +1465,15 @@ def build_slide_7():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\Me\Redesign with Design System\Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title & Logo
     add_slide_title(slide, "Governed. Standardized. Automated. Optimized.")
-    logo_path = r"c:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\Me\Redesign with Design System\Icons\logo_akkodis_white.png"
+    logo_path = os.path.join(ICONS_DIR, "logo_partner_white.png")
     try:
         slide.shapes.add_picture(logo_path, Inches(10.8), Inches(0.2), Inches(2.0), Inches(0.4))
     except Exception as e:
-        print(f"Error adding logo: {e}")
+        pass
 
     # --- TOP COLUMN HEADERS ---
     # Column 1: Governance Pyramid Header
@@ -1925,7 +1928,7 @@ def build_slide_8():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\Me\Redesign with Design System\Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -1934,7 +1937,7 @@ def build_slide_8():
     tf_title.margin_left = tf_title.margin_right = tf_title.margin_top = tf_title.margin_bottom = 0
     p_title = tf_title.paragraphs[0]
     r_t1 = p_title.add_run()
-    r_t1.text = "AKKODIS OFFSHORE DEVELOPMENT CENTER – PUNE, INDIA\n"
+    r_t1.text = "GLOBAL OFFSHORE DEVELOPMENT CENTER – PUNE HUB\n"
     r_t1.font.name = "Arial"
     r_t1.font.size = Pt(22)
     r_t1.font.bold = True
@@ -1947,12 +1950,12 @@ def build_slide_8():
     r_t2.font.bold = True
     r_t2.font.color.rgb = GOLD
 
-    # Akkodis Logo
-    logo_path = os.path.join(icons_dir, "logo_akkodis_white.png")
+    # BrandMorph Delivery Logo
+    logo_path = os.path.join(icons_dir, "logo_partner_white.png")
     try:
         slide.shapes.add_picture(logo_path, Inches(10.8), Inches(0.25), Inches(2.0), Inches(0.4))
     except Exception as e:
-        print(f"Error adding logo: {e}")
+        pass
 
     # --- SECTION 1: DEVELOPMENT CENTER OVERVIEW (Top-Left) ---
     draw_card(0.4, 0.9, 4.2, 3.6, CARD_BG, BORDER_BLUE)
@@ -2050,7 +2053,7 @@ def build_slide_8():
         data_labels.font.size = Pt(7.5)
         data_labels.font.name = "Arial"
     except Exception as e:
-        print(f"Error adding doughnut chart: {e}")
+        pass
 
     circ_center = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(6.55), Inches(2.1), Inches(0.55), Inches(0.55))
     circ_center.fill.solid()
@@ -2073,7 +2076,7 @@ def build_slide_8():
     add_text_box(9.3, 1.3, 3.5, 0.2, [{"text": "Secure Access to Customer Systems via VPN & SSO", "bold": True, "size": 8, "color": CYAN}], PP_ALIGN.CENTER)
 
     grid_items = [
-        ("VOLKSWAGEN", "Requirements / ALM", "logo_vw.png", 0, 0),
+        ("AUTOMOTIVE OEM", "Requirements / ALM", "logo_auto.png", 0, 0),
         ("KOSTAL", "PDM & BOM", "logo_kostal.png", 1, 0),
         ("Jira", "Issue Tracking", "logo_jira.png", 2, 0),
         ("Confluence", "Documentation", "logo_confluence.png", 0, 1),
@@ -2209,7 +2212,7 @@ def build_slide_8():
     draw_connector_line(11.5, 5.25, 0.2, 0.02, CYAN)
     
     draw_card(10.55, 5.0, 0.9, 0.55, RGBColor(12, 35, 75), GOLD)
-    add_text_box(10.55, 5.05, 0.9, 0.45, [{"text": "Akkodis\nODC Pune", "bold": True, "size": 7.5, "color": GOLD}], PP_ALIGN.CENTER)
+    add_text_box(10.55, 5.05, 0.9, 0.45, [{"text": "BrandMorph Delivery\nODC Pune", "bold": True, "size": 7.5, "color": GOLD}], PP_ALIGN.CENTER)
     
     draw_card(11.75, 5.05, 0.9, 0.45, CARD_BG, BORDER_BLUE)
     add_text_box(11.75, 5.1, 0.9, 0.35, [{"text": "Other WW\nLocations", "bold": True, "size": 7, "color": WHITE}], PP_ALIGN.CENTER)
@@ -2235,7 +2238,7 @@ def build_slide_8():
         ("People & Culture", "icon_group_w.png"),
         ("Quality Driven", "icon_badge_w.png"),
         ("Innovation Led", "icon_rocket_w.png"),
-        ("One Akkodis", "icon_network_w.png")
+        ("One Delivery", "icon_network_w.png")
     ]
     
     slot_w = 12.53 / 6.0
@@ -2342,7 +2345,7 @@ def build_slide_9():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -2364,8 +2367,8 @@ def build_slide_9():
     r_t2.font.bold = True
     r_t2.font.color.rgb = GOLD
 
-    # Akkodis Logo
-    logo_path = os.path.join(icons_dir, "logo_akkodis_white.png")
+    # BrandMorph Delivery Logo
+    logo_path = os.path.join(icons_dir, "logo_partner_white.png")
     try:
         slide.shapes.add_picture(logo_path, Inches(10.8), Inches(0.25), Inches(2.0), Inches(0.4))
     except:
@@ -2430,21 +2433,21 @@ def build_slide_9():
         {"text": "(Center of Excellence)", "size": 8.5, "color": WHITE}
     ])
 
-    # Row 2: Has prior Renault Project Experience
+    # Row 2: Has prior Global OEM Project Experience
     c2 = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(8.45), Inches(1.9), Inches(0.35), Inches(0.35))
     c2.fill.solid()
     c2.fill.fore_color.rgb = RGBColor(12, 35, 75)
     c2.line.color.rgb = CYAN
     c2.line.width = Pt(0.7)
     try:
-        # Load Renault logo directly
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_renault.png"), Inches(8.5), Inches(1.95), Inches(0.25), Inches(0.25))
+        # Load Global OEM logo directly
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_oem.png"), Inches(8.5), Inches(1.95), Inches(0.25), Inches(0.25))
     except:
         pass
         
     add_text_box(8.9, 1.87, 3.8, 0.45, [
         {"text": "Has prior\n", "size": 8.5, "color": WHITE},
-        {"text": "Renault ", "bold": True, "size": 9.5, "color": GOLD},
+        {"text": "Global OEM ", "bold": True, "size": 9.5, "color": GOLD},
         {"text": "Project Experience", "size": 8.5, "color": WHITE}
     ])
 
@@ -2640,7 +2643,7 @@ def build_slide_10():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -2656,28 +2659,28 @@ def build_slide_10():
     r_t1.font.color.rgb = GOLD
     
     r_t2 = p_title.add_run()
-    r_t2.text = "Accelerating Airbus Smart Factory & Digital Operations Transformation"
+    r_t2.text = "Accelerating Enterprise Smart Factory & Digital Operations Transformation"
     r_t2.font.name = "Arial"
     r_t2.font.size = Pt(11)
     r_t2.font.bold = True
     r_t2.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus_plane.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
+        slide.shapes.add_picture(os.path.join(icons_dir, "plane_illustration.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
         pass
 
     # Introduction paragraph (Arial, min font size 8/9)
     add_text_box(0.4, 0.92, 9.5, 0.45, [
-        {"text": "Akkodis brings 15+ years of Airbus Digital Operations (DO) Shopfloor experience, supporting Operations, Quality, Procurement, Industrial Solutions and Aerostructures domains through engineering, analytics, automation and operational excellence services.", "size": 8.5, "color": WHITE}
+        {"text": "BrandMorph Delivery brings 15+ years of Enterprise Digital Operations (DO) Shopfloor experience, supporting Operations, Quality, Procurement, Industrial Solutions and Aerostructures domains through engineering, analytics, automation and operational excellence services.", "size": 8.5, "color": WHITE}
     ])
 
     # --- 5 CARD COLUMNS + BUSINESS VALUE CARD ---
@@ -2777,7 +2780,7 @@ def build_slide_10():
     x_val = 0.4 + 5 * (col_w + spacing)
     draw_card(x_val, 1.42, col_w, 4.1, CARD_BG, CYAN)
     draw_card(x_val, 1.42, col_w, 0.35, RGBColor(12, 50, 60), CYAN)
-    add_text_box(x_val, 1.46, col_w, 0.3, [{"text": "BUSINESS VALUE\nDELIVERED TO AIRBUS", "bold": True, "size": 7, "color": CYAN}], PP_ALIGN.CENTER)
+    add_text_box(x_val, 1.46, col_w, 0.3, [{"text": "BUSINESS VALUE\nDELIVERED TO CLIENT", "bold": True, "size": 7, "color": CYAN}], PP_ALIGN.CENTER)
 
     values = [
         "Faster Industrial Digital\nTransformation",
@@ -2801,13 +2804,13 @@ def build_slide_10():
         # Value text description
         add_text_box(x_val + 0.3, y_pos - 0.02, col_w - 0.35, 0.45, [{"text": val, "size": 7, "color": WHITE}])
 
-    # --- PROVEN AIRBUS EXPERIENCE (Bottom-Middle Section) ---
+    # --- PROVEN ENTERPRISE EXPERIENCE (Bottom-Middle Section) ---
     draw_connector_line(0.4, 5.62, 12.5, 0.015, BORDER_BLUE)
     tb_proven = slide.shapes.add_textbox(Inches(5.0), Inches(5.52), Inches(3.3), Inches(0.25))
     p_proven = tb_proven.text_frame.paragraphs[0]
     p_proven.alignment = PP_ALIGN.CENTER
     r_proven = p_proven.add_run()
-    r_proven.text = " PROVEN AIRBUS EXPERIENCE "
+    r_proven.text = " PROVEN ENTERPRISE EXPERIENCE "
     r_proven.font.bold = True
     r_proven.font.size = Pt(8.5)
     r_proven.font.color.rgb = CYAN
@@ -2820,7 +2823,7 @@ def build_slide_10():
     tf_stats.margin_left = tf_stats.margin_right = tf_stats.margin_top = tf_stats.margin_bottom = 0
     p_stats = tf_stats.paragraphs[0]
     r_s_title = p_stats.add_run()
-    r_s_title.text = "AIRBUS DIGITAL OPERATIONS\n(DO) SHOPFLOOR\n"
+    r_s_title.text = "ENTERPRISE DIGITAL OPERATIONS\n(DO) SHOPFLOOR\n"
     r_s_title.font.bold = True
     r_s_title.font.size = Pt(8)
     r_s_title.font.color.rgb = GOLD
@@ -2844,7 +2847,7 @@ def build_slide_10():
     tf_sky.margin_left = tf_sky.margin_right = tf_sky.margin_top = tf_sky.margin_bottom = 0
     p_sky = tf_sky.paragraphs[0]
     r_sk_title = p_sky.add_run()
-    r_sk_title.text = "AIRBUS SKYWISE EXPERTISE\n"
+    r_sk_title.text = "ENTERPRISE DATA PLATFORM EXPERTISE\n"
     r_sk_title.font.bold = True
     r_sk_title.font.size = Pt(8)
     r_sk_title.font.color.rgb = GOLD
@@ -2868,7 +2871,7 @@ def build_slide_10():
     tf_ar.margin_left = tf_ar.margin_right = tf_ar.margin_top = tf_ar.margin_bottom = 0
     p_ar = tf_ar.paragraphs[0]
     r_ar_title = p_ar.add_run()
-    r_ar_title.text = "AIRBUS AR/VR & INDUSTRIAL SOLUTIONS\n"
+    r_ar_title.text = "AR/VR & INDUSTRIAL SOLUTIONS\n"
     r_ar_title.font.bold = True
     r_ar_title.font.size = Pt(8)
     r_ar_title.font.color.rgb = GOLD
@@ -2890,7 +2893,7 @@ def build_slide_10():
         pass
         
     add_text_box(10.2, 5.8, 2.65, 0.85, [
-        {"text": "Akkodis combines Airbus domain knowledge, Skywise capabilities, Shopfloor digitalization experience, AR/VR innovation, and IT/OT integration know-how to support Airbus' journey towards Smart Manufacturing.", "size": 6.8, "color": WHITE}
+        {"text": "BrandMorph Delivery combines Enterprise Aerospace domain knowledge, Skywise capabilities, Shopfloor digitalization experience, AR/VR innovation, and IT/OT integration know-how to support the enterprise journey towards Smart Manufacturing.", "size": 6.8, "color": WHITE}
     ])
 
     # --- 6. BOTTOM-MOST BANNER ---
@@ -2898,9 +2901,9 @@ def build_slide_10():
     
     footer_segments = [
         ("OUR DIFFERENTIATORS", "icon_excellence.png"),
-        ("15+ Yrs Airbus Experience", "icon_diploma_w.png"),
+        ("15+ Yrs Enterprise Experience", "icon_diploma_w.png"),
         ("Dedicated Secure ODC", "icon_shield_w.png"),
-        ("Airbus Governance", "icon_process_w.png"),
+        ("Enterprise Governance", "icon_process_w.png"),
         ("AI & Automation", "icon_rocket_w.png"),
         ("24x7 Operations", "icon_calendar_w.png")
     ]
@@ -2995,7 +2998,7 @@ def build_slide_11():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -3011,22 +3014,22 @@ def build_slide_11():
     r_t1.font.color.rgb = GOLD
     
     r_t2 = p_title.add_run()
-    r_t2.text = "Aligning Airbus Digital Operations Vision with a Scalable, Secure & Adaptive Delivery Model"
+    r_t2.text = "Aligning Enterprise Digital Operations Vision with a Scalable, Secure & Adaptive Delivery Model"
     r_t2.font.name = "Arial"
     r_t2.font.size = Pt(11)
     r_t2.font.bold = True
     r_t2.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus_plane.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
+        slide.shapes.add_picture(os.path.join(icons_dir, "plane_illustration.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
         pass
 
@@ -3103,19 +3106,19 @@ def build_slide_11():
         bullets_text = bullets_text.strip("\n")
         add_text_box(bx + 0.05, 3.98, 2.3, 1.45, [{"text": bullets_text, "size": 7, "color": WHITE}])
 
-    # --- RIGHT COLUMN: Why Akkodis Differentiators ---
+    # --- RIGHT COLUMN: Key Differentiators Differentiators ---
     draw_card(8.4, 0.95, 4.5, 4.6, CARD_BG, BORDER_BLUE)
     draw_card(8.4, 0.95, 4.5, 0.35, RGBColor(12, 35, 75), BORDER_BLUE)
-    add_text_box(8.5, 1.0, 4.3, 0.25, [{"text": "WHY AKKODIS - OUR DIFFERENTIATORS", "bold": True, "size": 9.5, "color": WHITE}], PP_ALIGN.CENTER)
+    add_text_box(8.5, 1.0, 4.3, 0.25, [{"text": "VALUE PROPOSITION - OUR DIFFERENTIATORS", "bold": True, "size": 9.5, "color": WHITE}], PP_ALIGN.CENTER)
 
     diffs = [
-        ("15+ Years Airbus DO Experience", "Deep domain and process knowledge", "icon_diploma_w.png"),
-        ("600+ Airbus Applications Managed", "Across Operations, Quality & Procurement", "icon_group_w.png"),
+        ("15+ Years Industrial DO Experience", "Deep domain and process knowledge", "icon_diploma_w.png"),
+        ("600+ Enterprise Applications Managed", "Across Operations, Quality & Procurement", "icon_group_w.png"),
         ("100+ Critical Applications", "Reliable support with high SLA", "icon_shield_w.png"),
         ("Skywise Expertise", "Data engineering, analytics and Skywise applications", "icon_skywise.png"),
         ("AR/VR & Connected Worker Solutions", "MiRA, HoloLens, Smart Wearables, IRIS Solutions", "icon_arvr_headset.png"),
         ("Build + Run + Transform Capability", "End-to-end ownership for predictable outcomes", "icon_workflow_w.png"),
-        ("Dedicated Secure Airbus ODC", "Segregated, compliant and audit-ready delivery environment", "icon_shield_w.png")
+        ("Dedicated Secure Enterprise ODC", "Segregated, compliant and audit-ready delivery environment", "icon_shield_w.png")
     ]
     for idx, (d_title, d_desc, icon_file) in enumerate(diffs):
         y_pos = 1.4 + idx * 0.58
@@ -3158,7 +3161,7 @@ def build_slide_11():
     tf_msg.margin_left = tf_msg.margin_right = tf_msg.margin_top = tf_msg.margin_bottom = 0
     p_msg = tf_msg.paragraphs[0]
     r_msg = p_msg.add_run()
-    r_msg.text = "KEY MESSAGE: Akkodis combines Airbus domain expertise, industrial digitalization know-how, operational excellence, and a scalable secure delivery model to rapidly adapt to evolving Airbus priorities while ensuring quality, security, and delivery predictability."
+    r_msg.text = "KEY MESSAGE: BrandMorph Delivery combines Enterprise Aerospace domain expertise, industrial digitalization know-how, operational excellence, and a scalable secure delivery model to rapidly adapt to evolving Enterprise Aerospace priorities while ensuring quality, security, and delivery predictability."
     r_msg.font.bold = True
     r_msg.font.size = Pt(8)
     r_msg.font.color.rgb = GOLD
@@ -3250,7 +3253,7 @@ def build_slide_12():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -3266,22 +3269,22 @@ def build_slide_12():
     r_t1.font.color.rgb = GOLD
     
     r_t2 = p_title.add_run()
-    r_t2.text = "A Scalable, Secure & Adaptive Delivery Model Supporting Airbus Smart Factory"
+    r_t2.text = "A Scalable, Secure & Adaptive Delivery Model Supporting Enterprise Smart Factory"
     r_t2.font.name = "Arial"
     r_t2.font.size = Pt(11)
     r_t2.font.bold = True
     r_t2.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus_plane.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
+        slide.shapes.add_picture(os.path.join(icons_dir, "plane_illustration.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
         pass
 
@@ -3345,7 +3348,7 @@ def build_slide_12():
 
     # Stages flow inside framework card
     stages = [
-        ("DEDICATED SECURE\nAIRBUS ODC", "icon_shield_w.png", 6.75, 1.5, 1.8, 1.2),
+        ("DEDICATED SECURE\nENTERPRISE ODC", "icon_shield_w.png", 6.75, 1.5, 1.8, 1.2),
         ("BUSINESS CHANGE", "icon_gear_w.png", 8.8, 1.5, 1.2, 0.7),
         ("SCALABLE\nTALENT POOL", "icon_group_w.png", 10.3, 1.5, 1.2, 0.7),
         ("SAFe / Agile\nWaterfall", "icon_process_w.png", 8.8, 2.5, 2.7, 0.8),
@@ -3473,7 +3476,7 @@ def build_slide_13():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -3495,14 +3498,14 @@ def build_slide_13():
     r_t2.font.bold = True
     r_t2.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
         slide.shapes.add_picture(os.path.join(icons_dir, "slide13_header_bg.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
@@ -3778,7 +3781,7 @@ def build_slide_14():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -3800,14 +3803,14 @@ def build_slide_14():
     r_t2.font.bold = True
     r_t2.font.color.rgb = GOLD
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
         slide.shapes.add_picture(os.path.join(icons_dir, "slide13_header_bg.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
@@ -3999,7 +4002,7 @@ def build_slide_14():
     except:
         pass
         
-    add_text_box(9.1, 5.55, 3.7, 0.3, [{"text": "DEDICATED SECURE AIRBUS ODC", "bold": True, "size": 7.5, "color": CYAN}])
+    add_text_box(9.1, 5.55, 3.7, 0.3, [{"text": "DEDICATED SECURE ENTERPRISE ODC", "bold": True, "size": 7.5, "color": CYAN}])
     
     bullets = "• Segregated Environment  • RBAC & Access Control\n• Export Control Awareness  • GDPR & Data Protection\n• Business Continuity & Disaster Recovery"
     add_text_box(9.1, 5.8, 3.7, 0.55, [{"text": bullets, "size": 6.5, "color": TEXT_MUTED}])
@@ -4109,7 +4112,7 @@ def build_slide_16():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -4125,20 +4128,20 @@ def build_slide_16():
     r_t1.font.color.rgb = WHITE
     
     r_t2 = p_title.add_run()
-    r_t2.text = "Airbus Digital Operations - Build, Run & Govern"
+    r_t2.text = "Enterprise Digital Operations - Build, Run & Govern"
     r_t2.font.name = "Arial"
     r_t2.font.size = Pt(11)
     r_t2.font.bold = True
     r_t2.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
         slide.shapes.add_picture(os.path.join(icons_dir, "slide13_header_bg.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
@@ -4270,16 +4273,16 @@ def build_slide_16():
     except:
         pass
 
-    # --- RIGHT COLUMN: Why Akkodis ---
+    # --- RIGHT COLUMN: Key Differentiators ---
     draw_card(10.15, 0.95, 2.78, 4.48, CARD_BG, BORDER_BLUE)
     draw_card(10.15, 0.95, 2.78, 0.35, RGBColor(12, 35, 75), BORDER_BLUE)
-    add_text_box(10.25, 1.0, 2.58, 0.25, [{"text": "Why Akkodis", "bold": True, "size": 9.5, "color": WHITE}], PP_ALIGN.CENTER)
+    add_text_box(10.25, 1.0, 2.58, 0.25, [{"text": "Key Differentiators", "bold": True, "size": 9.5, "color": WHITE}], PP_ALIGN.CENTER)
 
     reasons = [
-        ("Airbus Domain Expertise", "icon_globe_w.png"),
+        ("Aerospace Domain Expertise", "icon_globe_w.png"),
         ("Operational Excellence", "icon_gear_w.png"),
         ("AI-Enabled Service Delivery", "icon_robot.png"),
-        ("Dedicated Secure Airbus ODC", "icon_shield_w.png"),
+        ("Dedicated Secure Enterprise ODC", "icon_shield_w.png"),
         ("Build + Run + Govern Model", "icon_workflow_w.png"),
         ("Industrial Digitalization", "icon_company_w.png"),
         ("SCADA, Kafka & Aerostructures", "icon_network_w.png"),
@@ -4411,7 +4414,7 @@ def build_slide_17():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -4441,14 +4444,14 @@ def build_slide_17():
     r_t3.font.bold = True
     r_t3.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
         slide.shapes.add_picture(os.path.join(icons_dir, "slide13_header_bg.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
@@ -4743,7 +4746,7 @@ def build_slide_18():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -4759,20 +4762,20 @@ def build_slide_18():
     r_t1.font.color.rgb = GOLD
     
     r_t2 = p_title.add_run()
-    r_t2.text = "Delivering Stable, Secure and High-Performing Digital Services that Power Airbus Operations"
+    r_t2.text = "Delivering Stable, Secure and High-Performing Digital Services that Power Enterprise Operations"
     r_t2.font.name = "Arial"
     r_t2.font.size = Pt(11)
     r_t2.font.bold = True
     r_t2.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
         slide.shapes.add_picture(os.path.join(icons_dir, "slide13_header_bg.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
@@ -4787,7 +4790,7 @@ def build_slide_18():
         
     add_text_box(1.05, 1.0, 5.8, 0.6, [
         {"text": "DEFINITION: ", "bold": True, "size": 8.5, "color": GOLD},
-        {"text": "Delivering stable, secure, highly available, and continuously improving digital services that support Airbus manufacturing, quality, procurement, and operational environments while ensuring SLA compliance and business continuity.", "size": 7.5, "color": WHITE}
+        {"text": "Delivering stable, secure, highly available, and continuously improving digital services that support Enterprise Aerospace manufacturing, quality, procurement, and operational environments while ensuring SLA compliance and business continuity.", "size": 7.5, "color": WHITE}
     ])
     
     draw_connector_line(6.9, 1.0, 0.015, 0.58, BORDER_BLUE)
@@ -4981,7 +4984,7 @@ def build_slide_19():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -5003,14 +5006,14 @@ def build_slide_19():
     r_t2.font.bold = True
     r_t2.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
         slide.shapes.add_picture(os.path.join(icons_dir, "slide13_header_bg.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
@@ -5053,7 +5056,7 @@ def build_slide_19():
 
     enablers = [
         ("Secure\nInfrastructure", "Reliable and compliant physical & cloud host environments", "icon_shield_w.png", 0, 0),
-        ("Skilled & Experienced\nAirbus Teams", "Domain experts with specialized operational readiness", "icon_group_w.png", 1, 0),
+        ("Skilled & Experienced\nDelivery Teams", "Domain experts with specialized operational readiness", "icon_group_w.png", 1, 0),
         ("Training &\nCertification", "Ongoing technical training & process certifications", "icon_diploma_w.png", 2, 0),
         ("AI-Enabled\nOperations", "Leveraging machine learning & automations for predictability", "icon_robot.png", 0, 1),
         ("Strong Governance\n& Collaboration", "Unified engagement models across IT & operations", "icon_group_w.png", 1, 1),
@@ -5079,10 +5082,10 @@ def build_slide_19():
             {"text": desc, "size": 6.8, "color": WHITE}
         ], PP_ALIGN.CENTER)
 
-    # Right Card: Dedicated Secure Airbus ODC
+    # Right Card: Dedicated Secure Enterprise ODC
     draw_card(8.4, 2.3, 4.5, 4.0, CARD_BG, BORDER_BLUE)
     draw_card(8.4, 2.3, 4.5, 0.32, RGBColor(12, 35, 75), BORDER_BLUE)
-    add_text_box(8.5, 2.33, 4.3, 0.25, [{"text": "DEDICATED SECURE AIRBUS ODC", "bold": True, "size": 9, "color": CYAN}], PP_ALIGN.CENTER)
+    add_text_box(8.5, 2.33, 4.3, 0.25, [{"text": "DEDICATED SECURE ENTERPRISE ODC", "bold": True, "size": 9, "color": CYAN}], PP_ALIGN.CENTER)
 
     c_sh = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(10.45), Inches(2.78), Inches(0.55), Inches(0.55))
     c_sh.fill.solid()
@@ -5097,7 +5100,7 @@ def build_slide_19():
     odc_bullets = [
         "Segregated Physical Environment",
         "Strict RBAC & Need-to-know access control",
-        "Airbus specific Security Training",
+        "Enterprise-specific Security Training",
         "Export Control Awareness & Monitoring",
         "GDPR & Data Protection compliance",
         "Business continuity & Disaster Recovery ready"
@@ -5209,7 +5212,7 @@ def build_slide_20():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -5239,9 +5242,9 @@ def build_slide_20():
     r_t3.font.bold = True
     r_t3.font.color.rgb = CYAN
 
-    # Akkodis Logo in top right
+    # BrandMorph Delivery Logo in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
@@ -5425,7 +5428,7 @@ def build_slide_21():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
     # 1. Slide Title (Times New Roman 28pt)
     titleBox = slide.shapes.add_textbox(Inches(0.4), Inches(0.15), Inches(9.5), Inches(0.8))
@@ -5449,20 +5452,20 @@ def build_slide_21():
     r_t2.font.color.rgb = WHITE
     
     r_t3 = p_title.add_run()
-    r_t3.text = "A Scalable, Secure & Adaptive Delivery Model Aligning to Airbus Priorities"
+    r_t3.text = "A Scalable, Secure & Adaptive Delivery Model Aligning to Enterprise Client Priorities"
     r_t3.font.name = "Arial"
     r_t3.font.size = Pt(11)
     r_t3.font.bold = True
     r_t3.font.color.rgb = CYAN
 
-    # Airbus & Akkodis Logos in top right
+    # Enterprise Aerospace & BrandMorph Delivery Logos in top right
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_airbus.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_client.png"), Inches(10.0), Inches(0.25), Inches(1.2), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(11.4), Inches(0.25), Inches(1.5), Inches(0.3))
     except:
         pass
 
-    # Airbus plane background illustration
+    # Enterprise Aerospace plane background illustration
     try:
         slide.shapes.add_picture(os.path.join(icons_dir, "slide13_header_bg.png"), Inches(6.8), Inches(0.12), Inches(2.2), Inches(0.75))
     except:
@@ -5501,7 +5504,7 @@ def build_slide_21():
 
     # Card 1: Secure Delivery Center
     draw_card(4.6, 1.35, 3.7, 1.15, CARD_BG, BORDER_BLUE)
-    add_text_box(4.65, 1.37, 3.6, 0.2, [{"text": "SECURE AIRBUS DELIVERY CENTER", "bold": True, "size": 7, "color": GOLD}], PP_ALIGN.CENTER)
+    add_text_box(4.65, 1.37, 3.6, 0.2, [{"text": "SECURE GLOBAL DELIVERY CENTER", "bold": True, "size": 7, "color": GOLD}], PP_ALIGN.CENTER)
     bullets_odc = "• Segregated delivery organization  • Trained & certified resources\n• Security compliance  • Export Control & GDPR  • Business continuity"
     add_text_box(4.65, 1.58, 3.6, 0.9, [{"text": bullets_odc, "size": 6, "color": WHITE}], PP_ALIGN.CENTER)
 
@@ -5699,11 +5702,11 @@ def build_slide_22():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
-    # Akkodis Logo in top left
+    # BrandMorph Delivery Logo in top left
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(0.4), Inches(0.2), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(0.4), Inches(0.2), Inches(1.5), Inches(0.3))
     except:
         pass
 
@@ -5817,9 +5820,7 @@ def build_slide_23():
     try:
         import os
         from PIL import Image
-        brain_dir = r"C:\Users\Akshay.JOHN-XAVIER\.\gemini\antigravity-ide\brain\90927278-bd0d-48cf-b562-bc44917b61b1"
-        if not os.path.exists(brain_dir):
-            brain_dir = r"C:\Users\Akshay.JOHN-XAVIER\.gemini\antigravity-ide\brain\90927278-bd0d-48cf-b562-bc44917b61b1"
+        brain_dir = os.environ.get("BRANDMORPH_ASSETS_DIR", os.path.join(BASE_DIR, "assets"))
         files = [f for f in os.listdir(brain_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
         files_with_time = [(f, os.path.getmtime(os.path.join(brain_dir, f))) for f in files]
         files_with_time.sort(key=lambda x: x[1], reverse=True)
@@ -5832,11 +5833,11 @@ def build_slide_23():
                 right = int(width * 0.80)
                 bottom = int(height * 0.72)
                 cockpit_img = img.crop((left, top, right, bottom))
-                output_path = r"c:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\Me\Redesign with Design System\Icons\slide23_cockpit.png"
+                output_path = os.path.join(ICONS_DIR, "slide23_cockpit.png")
                 cockpit_img.save(output_path)
                 print("Successfully cropped cockpit image dynamically.")
     except Exception as e:
-        print("Dynamic cropping error:", e)
+        pass
 
     slide = prs.slides.add_slide(blank_layout)
     set_slide_background(slide)
@@ -5897,11 +5898,11 @@ def build_slide_23():
         line.line.fill.background()
         return line
 
-    icons_dir = r"c:/Users/Akshay.JOHN-XAVIER/OneDrive - Akkodis/Documents/Me/Redesign with Design System/Icons"
+    icons_dir = ICONS_DIR
 
-    # Akkodis Logo in top left
+    # BrandMorph Delivery Logo in top left
     try:
-        slide.shapes.add_picture(os.path.join(icons_dir, "logo_akkodis_white.png"), Inches(0.4), Inches(0.2), Inches(1.5), Inches(0.3))
+        slide.shapes.add_picture(os.path.join(icons_dir, "logo_partner_white.png"), Inches(0.4), Inches(0.2), Inches(1.5), Inches(0.3))
     except:
         pass
 
@@ -6023,6 +6024,6 @@ build_slide_21()
 build_slide_22()
 build_slide_23()
 
-output_file = r"C:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\Me\Redesign with Design System\Framework_Performance_Redesign.pptx"
+output_file = os.environ.get("BRANDMORPH_OUTPUT_FILE", os.path.join(BASE_DIR, "Framework_Performance_Redesign.pptx"))
 prs.save(output_file)
 print("PPTX deck generated successfully at:", output_file)

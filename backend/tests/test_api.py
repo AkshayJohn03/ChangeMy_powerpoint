@@ -71,7 +71,7 @@ def test_brand_apply_returns_deck_and_report(client, tmp_path):
     r = client.post(
         "/api/brand/apply",
         files=_upload(deck),
-        data={"brand": "akkodis", "dry_run": "false"},
+        data={"brand": "enterprise_navy", "dry_run": "false"},
     )
     assert r.status_code == 200
     body = r.json()
@@ -88,7 +88,7 @@ def test_brand_apply_dry_run(client, tmp_path):
     r = client.post(
         "/api/brand/apply",
         files=_upload(deck),
-        data={"brand": "akkodis", "dry_run": "true"},
+        data={"brand": "enterprise_navy", "dry_run": "true"},
     )
     assert r.status_code == 200
     body = r.json()

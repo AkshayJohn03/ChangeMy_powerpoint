@@ -12,7 +12,7 @@ v1's pipeline is `PPTX → AST → rebuild-from-blank-layout`. That decision cau
 | D2 | **Hardcoded brand.** 5 colors + 2 fonts live as class attributes on `BrandTokens`; exactly 4 are overridable via the API (`bgColor, cardBg, titleFont, bodyFont`). GOLD/CYAN/TEXT_WHITE are constants. | `backend/builder.py:6-14`, `backend/main.py:64-72` | "Brand morph" is actually "re-paint in the one dark theme shipped with the repo." A second company's brand cannot be expressed. |
 | D3 | **Crude role heuristics.** Title vs body decided by `bbox.top < 1.5 and bbox.height < 1.2`; font size for titles is a constant `Pt(24)` regardless of original size. | `backend/builder.py:86-92` | Misclassified roles cascade: titles styled as body, body as titles, and text overflows because measured sizes are replaced by guesses. |
 | D4 | **Data loss is silent.** The decompiler emits `nodes` for shapes/text it understands; everything else vanishes (charts, tables, grouped shapes) with no warning channel. | `backend/decompiler.py` | Users only discover lost content after presenting. |
-| D5 | **Environment hardcoding.** `/api/parse_test_ppt` points at a personal OneDrive path; CORS is `*` with credentials. | `backend/main.py:46-56, 15-20` | Breaks on any other machine; insecure by default. |
+| D5 | **Environment hardcoding.** `/api/parse_test_ppt` points at a local machine path; CORS is `*` with credentials. | `backend/main.py:46-56, 15-20` | Breaks on any other machine; insecure by default. |
 | D6 | **No brand guideline ingestion at all.** The user's actual input is a brand guideline (PDF/website/YAML). v1 accepts only 4 JSON keys typed into a UI. | entire backend | The product premise — "give it my brand guideline" — is unimplemented. |
 
 **Verdict:** v1 is not a re-branding engine; it is a lossy deck-to-template transcoder with a fixed theme. The fix is not to tune the builder — it is to stop rebuilding.
@@ -54,7 +54,7 @@ Core principle (mirrors professional template-inheritance doctrine): **the origi
 
 **① BrandProfile ingestion** — `brandmorph/brand/profile.py`
 - `BrandDNA` pydantic model: `palette: dict[Role, BrandColor]` where `Role ∈ {background, surface, text_primary, text_muted, accent_primary, accent_secondary, success, warning, danger, link}`; each `BrandColor` has hex + `usage` notes. `typography: {heading: FontSpec(family, weights), body: FontSpec}`, `logo: {primary_path, light_variant_path}`, `tone: {voice, formality 0-1, glossary: dict[str,str], banned_words: list}`, `rules: {min_contrast: 4.5, preserve_all_caps: bool}`.
-- Ship `brands/akkodis.yaml` (navy `#030C1E`, surface `#081632`, gold `#FFB81C`, cyan `#00E5FF` — continuity with v1 tokens) and `brands/corporate_light.yaml` (a light theme, proving v1's hardcode was the limit).
+- Ship `brands/enterprise_navy.yaml` (navy `#030C1E`, surface `#081632`, gold `#FFB81C`, cyan `#00E5FF` — continuity with v1 tokens) and `brands/corporate_light.yaml` (a light theme, proving v1's hardcode was the limit).
 - PDF ingestion is **optional + pluggable**: `PDFBrandExtractor` protocol, `LLMPDFExtractor` impl behind an env-guarded import. Never a test dependency.
 
 **② DeckAnalyzer** — `brandmorph/engine/analyzer.py`
@@ -91,7 +91,7 @@ Core principle (mirrors professional template-inheritance doctrine): **the origi
 - `GET  /api/deck/inventory` (multipart) → DeckInventory JSON.
 - `POST /api/brand/extract` (multipart PDF) → draft `BrandDNA` YAML for human editing (LLM path only).
 - `POST /api/parse_deck` and `POST /api/export_deck` **keep working** (legacy Tauri UI depends on them) but `export_deck` now routes through the v2 in-place engine when `tokens.mode == "inplace"` (new UI can opt in); legacy rebuild path stays available under `mode: "rebuild"` with a deprecation warning in the response.
-- CLI: `python -m brandmorph apply --deck deck.pptx --brand brands/akkodis.yaml --out out.pptx [--dry-run] [--report report.md]`
+- CLI: `python -m brandmorph apply --deck deck.pptx --brand brands/enterprise_navy.yaml --out out.pptx [--dry-run] [--report report.md]`
 
 ### 2.3 Test strategy (offline, deterministic)
 

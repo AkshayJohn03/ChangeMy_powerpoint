@@ -5,5 +5,24 @@ __pycache__/
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 *.log
 forensiq-output/
+brag-output/
+scripts/
+
+# MCP configs with secrets — use .mcp.example.json as template
+.mcp.json
+
+# Proprietary / confidential presentation decks
+*.pptx
+!backend/samples/sample_legacy_pitch.pptx
+!backend/examples/*.pptx
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

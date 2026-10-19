@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Layers, Palette, Type, Grid, Image as ImageIcon, 
-  RefreshCw, Download, Settings, ShieldCheck, Cpu,
-  Upload, FileUp, Sparkles, Plus, Check, Trash2,
-  Zap, Server, Target, ArrowRight, Monitor, ChevronRight,
-  Maximize2, Move, Copy, Sliders, Eye, Globe, Database, Lock,
-  Activity, Cloud, Award, Share2, FileJson, Sun, Moon, Laptop,
-  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Indent, Outdent, ChevronDown, MoveRight, LayoutTemplate, PlusCircle,
-  RotateCcw, RotateCw, Circle, Square, Minus
+  Layers, Palette, Image as ImageIcon, 
+  RefreshCw, Download, ShieldCheck, Cpu,
+  Upload, FileUp, Sparkles,
+  Zap, Server, Target, Monitor,
+  Globe, Database, Lock,
+  Activity, Cloud, Award,
+  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
+  MoveRight, RotateCcw, RotateCw, Circle
 } from 'lucide-react';
 
 interface ASTNode {
@@ -72,7 +71,7 @@ export default function StudioWorkspace() {
   // Icon Swap state
   const [selectedIconKey, setSelectedIconKey] = useState<string>('zap');
 
-  // Akkodis Color Tokens
+  // Brand Color Tokens
   const [colors, setColors] = useState<ColorToken[]>([
     { id: 'gold', name: 'Gold Text 2', hex: '#FFB81C' },
     { id: 'aqua', name: 'Aqua Background 2', hex: '#00FFFF' },
@@ -81,10 +80,6 @@ export default function StudioWorkspace() {
     { id: 'white', name: 'High Contrast White', hex: '#FFFFFF' },
     { id: 'darkBlue', name: 'Dark Blue Accent', hex: '#0C3264' },
   ]);
-
-  const [newColorName, setNewColorName] = useState('');
-  const [newColorHex, setNewColorHex] = useState('#FFB81C');
-  const [showAddColor, setShowAddColor] = useState(false);
 
   // Typography System
   const [titleFont, setTitleFont] = useState('Times New Roman');
@@ -399,7 +394,7 @@ export default function StudioWorkspace() {
           </div>
           <div className="text-center space-y-2">
             <h1 className="text-4xl font-extrabold tracking-tight text-white">BrandMorph Engine</h1>
-            <p className="text-sm text-amber-400 font-semibold tracking-wide">Akkodis Presentation AST Architecture</p>
+            <p className="text-sm text-amber-400 font-semibold tracking-wide">Presentation AST Architecture</p>
           </div>
         </div>
       </div>
@@ -440,7 +435,7 @@ export default function StudioWorkspace() {
           {isProcessing && (
             <div className="flex items-center justify-center gap-3 p-4 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200">
               <RefreshCw className="w-4 h-4 animate-spin" />
-              Decompiling PowerPoint AST and applying Akkodis Brand Rules...
+              Decompiling PowerPoint AST and applying Brand Rules...
             </div>
           )}
 
@@ -859,7 +854,7 @@ export default function StudioWorkspace() {
 
             <div className="grid grid-cols-2 gap-2">
               {[
-                { id: 'dark', name: 'Akkodis Dark Base' },
+                { id: 'dark', name: 'Premium Dark Base' },
                 { id: 'white', name: 'Pure White' },
                 { id: 'blueGradient', name: 'Sky Gradient' },
                 { id: 'slate', name: 'Corporate Slate' }
@@ -953,7 +948,7 @@ export default function StudioWorkspace() {
                     onChange={(e) => setTitleFont(e.target.value)}
                     className="w-full text-xs p-1.5 bg-white border border-slate-300 rounded focus:outline-none"
                   >
-                    <option value="Times New Roman">Times New Roman (Akkodis Token Rule)</option>
+                    <option value="Times New Roman">Times New Roman (Brand Token Rule)</option>
                     <option value="Arial">Arial</option>
                   </select>
                 </div>
@@ -965,7 +960,7 @@ export default function StudioWorkspace() {
                     onChange={(e) => setBodyFont(e.target.value)}
                     className="w-full text-xs p-1.5 bg-white border border-slate-300 rounded focus:outline-none"
                   >
-                    <option value="Arial">Arial (Akkodis Token Rule)</option>
+                    <option value="Arial">Arial (Brand Token Rule)</option>
                     <option value="Roboto">Roboto</option>
                     <option value="Times New Roman">Times New Roman</option>
                   </select>

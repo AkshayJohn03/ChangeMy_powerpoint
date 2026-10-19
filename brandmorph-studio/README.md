@@ -1,6 +1,6 @@
 # BrandMorph Studio — Enterprise Content Supply Chain Automation
 
-**Akshay John Xavier — 8y Creative Technologist (Lead Executive, Akkodis)**
+**Akshay John Xavier — 8y Creative Technologist**
 > PowerPoint, rebuilt as code. No manual design. 102 slides → 6 premium dark templates → 216 W3C DTCG tokens → live on Vercel.
 
 **Live:** `https://brandmorph-studio.vercel.app` (deploy `dist/` via Vercel) — local preview: `npm run preview` → http://localhost:8443
@@ -25,7 +25,7 @@
 
 1. **KPI Performance Recovery** — 3 red trigger cards + 6-node journey + BEFORE/AFTER impact grid (border token = status)
 2. **Strategic Focus Areas** — 5-row loop, chevron pointer (GOLD) + detail + READY badge (CYAN)
-3. **RNTBCI SPOC** — Spoke-hub: 5 left teams + central oval + 5 right stakeholders + gold banner
+3. **Onsite Delivery SPOC** — Spoke-hub: 5 left teams + central oval + 5 right stakeholders + gold banner
 4. **Performance Summary** — OTD 97.6% + FTR 96.8% + 7-bar quarterly trend (RECTANGLE loops, not images) + FTE bars + Learnings/Challenges/Takeaways
 5. **Engineering Excellence** — 6-domain grid with real car images (BIW/Exterior/Interior/Seating/Lighting/Chassis) + DFMEA/PPAP/APQP
 6. **Competency Matrix** — 9 cards (stars ★☆ + capacity dot green/amber/red) + 2 legends + 7-item service time strip
@@ -74,7 +74,7 @@ Figma (42 vars, 7 pages) → Figma MCP extract → Tokens Studio (W3C DTCG, 216)
 - **chennai-neon-city/Blender**: 3D icon generation pipeline — future icon automation for PPTX
 - **agent_office**: multi-agent orchestration — future: add agent for brand QA checks
 
-BrandMorph is the highest-leverage now because it turns your current Akkodis pain (PowerPoint manual) into the exact enterprise skill Amazon/AWS/Monks pay $160k-$208k for (Senior DT, 8y bar).
+BrandMorph is the highest-leverage now because it turns enterprise pursuit-deck pain (PowerPoint manual labor) into the exact platform skill Amazon/AWS/Monks pay $160k-$208k for (Senior DT, 8y bar).
 
 ---
 

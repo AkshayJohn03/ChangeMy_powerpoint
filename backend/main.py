@@ -30,7 +30,9 @@ _CORS_ORIGINS = [
     o.strip() for o in os.environ.get(
         "BRANDMORPH_CORS_ORIGINS",
         "http://localhost:5173,http://localhost:8443,http://127.0.0.1:5173,"
-        "http://127.0.0.1:8443,tauri://localhost,https://tauri.localhost",
+        "http://127.0.0.1:8443,tauri://localhost,https://tauri.localhost,"
+        "https://akshayjohn.xyz,https://brandmorph-studio.vercel.app,"
+        "https://brandmorph.akshayjohn.xyz",
     ).split(",") if o.strip()
 ]
 app.add_middleware(
@@ -41,12 +43,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def hex_to_rgb(hex_str: str) -> RGBColor:
-    hex_str = hex_str.lstrip("#")
-    if len(hex_str) == 6:
-        r, g, b = tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
-        return RGBColor(r, g, b)
-    return RGBColor(37, 99, 235)
+def hex_to_rgb(hex_str: str, fallback: RGBColor = RGBColor(37, 99, 235)) -> RGBColor:
+    """Parse hex color string to RGBColor with safe normalization.
+
+    Handles: #RRGGBB, RRGGBB, #RGB (shorthand), #RRGGBBAA (strips alpha).
+    Returns fallback on any invalid input.
+    """
+    if not hex_str or not isinstance(hex_str, str):
+        return fallback
+    clean = hex_str.strip().lstrip("#")
+    if len(clean) == 3:
+        clean = "".join(c * 2 for c in clean)
+    if len(clean) >= 6:
+        try:
+            r, g, b = (int(clean[i:i + 2], 16) for i in (0, 2, 4))
+            return RGBColor(r, g, b)
+        except ValueError:
+            return fallback
+    return fallback
 
 def _save_upload(upload: UploadFile, suffix: str) -> str:
     """Stream upload to disk under a hard size cap (SECURITY.md: DoS defense)."""
@@ -70,14 +84,19 @@ async def parse_deck(file: UploadFile = File(...)):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-@app.get("/api/parse_test_ppt")
-async def parse_test_ppt():
-    # v1 hardcoded a personal OneDrive path here (defect D5); now env-configurable
-    test_path = os.environ.get("BRANDMORPH_TEST_DECK", "")
-    if not test_path:
-        return {"status": "error", "message": "Set BRANDMORPH_TEST_DECK to a .pptx path to use this helper."}
+@app.get("/api/demo_ast")
+async def demo_ast():
+    """Parse the bundled sample deck; no user data needed."""
+    samples_dir = os.path.join(os.path.dirname(__file__), "samples")
+    examples_dir = os.path.join(os.path.dirname(__file__), "examples")
+    test_path = os.environ.get(
+        "BRANDMORPH_TEST_DECK",
+        os.path.join(samples_dir, "sample_legacy_pitch.pptx"),
+    )
     if not os.path.exists(test_path):
-        return {"status": "error", "message": f"Test file not found at {test_path}"}
+        test_path = os.path.join(examples_dir, "demo_raw.pptx")
+    if not os.path.exists(test_path):
+        return {"status": "error", "message": "Sample deck not found. Place sample_legacy_pitch.pptx in backend/samples/ or demo_raw.pptx in backend/examples/."}
     try:
         decompiler = SlideDecompiler(test_path)
         ast = decompiler.parse_deck()
@@ -143,7 +162,7 @@ async def api_deck_inventory(file: UploadFile = File(...)):
 @app.post("/api/brand/apply")
 async def api_brand_apply(
     file: UploadFile = File(...),
-    brand: str = Form("akkodis"),
+    brand: str = Form("enterprise_navy"),
     dry_run: bool = Form(False),
     rewrite_copy: bool = Form(False),
 ):
@@ -190,7 +209,7 @@ async def api_brand_apply(
 @app.post("/api/brand/apply_batch")
 async def api_brand_apply_batch(
     files: list[UploadFile] = File(...),
-    brand: str = Form("akkodis"),
+    brand: str = Form("enterprise_navy"),
     dry_run: bool = Form(False),
 ):
     """Batch re-branding: each deck is isolated — one hostile/corrupt deck is

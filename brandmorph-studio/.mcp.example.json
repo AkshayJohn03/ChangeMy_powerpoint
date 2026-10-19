@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "stitch": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://stitch.googleapis.com/mcp", "--header", "X-Goog-Api-Key: ${STITCH_API_KEY}"],
+      "description": "Google Stitch — generates Figma-faithful UI variants from prompts + Figma context."
+    },
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "figma-developer-mcp", "--figma-api-key=${FIGMA_API_KEY}", "--stdio"],
+      "description": "Figma Developer MCP — extracts variables, auto-layout, Code Connect metadata."
+    },
+    "vercel": {
+      "command": "npx",
+      "args": ["-y", "@vercel/mcp", "--tools=deploy,env,logs"],
+      "description": "Vercel MCP — deploy, env management, and log streaming."
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "description": "GitHub MCP — PR diff inspection, commit history."
+    }
+  },
+  "_meta": {
+    "setup": "1. Copy this file to .mcp.json  2. Set env vars: STITCH_API_KEY (Google AI Studio), FIGMA_API_KEY (Figma → Settings → Personal access tokens), VERCEL_TOKEN (vercel.com/account/tokens)  3. No secrets should ever be hardcoded in this file."
+  }
+}

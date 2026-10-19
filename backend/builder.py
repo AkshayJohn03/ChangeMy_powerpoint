@@ -9,9 +9,35 @@ class BrandTokens:
     CYAN = RGBColor(0, 255, 255)           # Aqua Background 2 #00FFFF
     GOLD = RGBColor(255, 184, 28)          # Gold Text 2 #FFB81C
     TEXT_WHITE = RGBColor(255, 255, 255)   # White #FFFFFF
+    GREEN_BORDER = RGBColor(16, 185, 129)  # #10B981 (semantic.status.highCapacity)
+    RED_BORDER = RGBColor(239, 68, 68)     # #EF4444 (semantic.status.constrained)
+    TEXT_PRIMARY = RGBColor(248, 250, 252)  # #F8FAFC
 
     FONT_TITLE = "Times New Roman"
     FONT_BODY = "Arial"
+
+    @staticmethod
+    def hex_to_rgb(hex_str: str, fallback: RGBColor = None) -> RGBColor:
+        """Parse hex color string to RGBColor with safe normalization.
+
+        Handles: #RRGGBB, RRGGBB, #RGB (shorthand), #RRGGBBAA (strips alpha).
+        Returns fallback (defaults to CARD_BG) on any invalid input.
+        """
+        if fallback is None:
+            fallback = RGBColor(8, 22, 50)  # CARD_BG
+        if not hex_str or not isinstance(hex_str, str):
+            return fallback
+        clean = hex_str.strip().lstrip("#")
+        if len(clean) == 3:
+            clean = "".join(c * 2 for c in clean)
+        if len(clean) >= 6:
+            try:
+                r, g, b = (int(clean[i:i + 2], 16) for i in (0, 2, 4))
+                return RGBColor(r, g, b)
+            except ValueError:
+                return fallback
+        return fallback
+
 
 class NativePPTXBuilder:
     def __init__(self):
