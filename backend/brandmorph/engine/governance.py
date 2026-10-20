@@ -101,7 +101,7 @@ class CorporateGovernancePass:
             s_name = getattr(s, "name", "") or ""
             if "BrandMorphBottomFrame" in s_name or "BrandMorphAccentLine" in s_name:
                 has_bottom_frame = True
-            if "BrandMorphStamp" in s_name:
+            if "BrandMorph_Logo_Stamp" in s_name or "BrandMorphStamp" in s_name:
                 has_stamp = True
 
         # 2. Subtle geometric bottom accent line
@@ -119,13 +119,13 @@ class CorporateGovernancePass:
             except Exception:
                 pass
 
-        # 3. Clean top-right brand wordmark/stamp (left=11.5", top=0.32", width=1.45", height=0.42")
+        # 3. Clean top-right brand wordmark/stamp (left=11.55", top=0.35", width=1.25", height=0.35")
         if not has_stamp:
             try:
                 stamp = slide.shapes.add_textbox(
-                    Inches(11.5), Inches(0.32), Inches(1.45), Inches(0.42)
+                    Inches(11.55), Inches(0.35), Inches(1.25), Inches(0.35)
                 )
-                stamp.name = "BrandMorphStamp"
+                stamp.name = "BrandMorph_Logo_Stamp"
                 tf = stamp.text_frame
                 tf.word_wrap = False
                 tf.margin_left = tf.margin_top = tf.margin_right = tf.margin_bottom = 0
@@ -133,7 +133,7 @@ class CorporateGovernancePass:
                 p.text = "BRANDMORPH"
                 p.alignment = pptx.enum.text.PP_ALIGN.RIGHT
                 p.font.name = "Arial"
-                p.font.size = Pt(10)
+                p.font.size = Pt(9.5)
                 p.font.bold = True
                 p.font.color.rgb = RGB_CORP_YELLOW
             except Exception:
@@ -146,7 +146,7 @@ class CorporateGovernancePass:
 
     def _process_shape(self, shape, slide_idx: int, default_bg: str) -> None:
         # Avoid overriding our own brand stamp
-        if getattr(shape, "name", "") == "BrandMorphStamp":
+        if getattr(shape, "name", "") in ("BrandMorph_Logo_Stamp", "BrandMorphStamp"):
             return
 
         # 1. Group shapes: recursively process children

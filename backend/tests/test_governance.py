@@ -48,11 +48,11 @@ def test_corporate_typography_and_contrast_contract(tmp_path):
     for slide_idx, slide in enumerate(prs.slides):
         # Assert slide has brand stamp and bottom framing
         shape_names = [s.name for s in slide.shapes]
-        assert "BrandMorphStamp" in shape_names, f"Slide {slide_idx} missing BrandMorphStamp"
+        assert "BrandMorph_Logo_Stamp" in shape_names or "BrandMorphStamp" in shape_names, f"Slide {slide_idx} missing BrandMorph logo stamp"
         assert "BrandMorphBottomFrame" in shape_names, f"Slide {slide_idx} missing BrandMorphBottomFrame"
 
         for shape in slide.shapes:
-            if shape.name == "BrandMorphStamp":
+            if shape.name in ("BrandMorph_Logo_Stamp", "BrandMorphStamp"):
                 continue
 
             if shape.has_text_frame:

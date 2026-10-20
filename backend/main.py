@@ -121,8 +121,10 @@ async def demo_ast():
     examples_dir = os.path.join(os.path.dirname(__file__), "examples")
     test_path = os.environ.get(
         "BRANDMORPH_TEST_DECK",
-        os.path.join(samples_dir, "sample_legacy_pitch.pptx"),
+        os.path.join(samples_dir, "sample_12slide_archetypes.pptx"),
     )
+    if not os.path.exists(test_path):
+        test_path = os.path.join(samples_dir, "sample_legacy_pitch.pptx")
     if not os.path.exists(test_path):
         test_path = os.path.join(examples_dir, "demo_raw.pptx")
     if not os.path.exists(test_path):
@@ -194,7 +196,9 @@ async def get_sample_pptx():
     """Download bundled unformatted sample presentation for one-click testing."""
     samples_dir = os.path.join(os.path.dirname(__file__), "samples")
     examples_dir = os.path.join(os.path.dirname(__file__), "examples")
-    sample_path = os.path.join(samples_dir, "sample_legacy_pitch.pptx")
+    sample_path = os.path.join(samples_dir, "sample_12slide_archetypes.pptx")
+    if not os.path.exists(sample_path):
+        sample_path = os.path.join(samples_dir, "sample_legacy_pitch.pptx")
     if not os.path.exists(sample_path):
         sample_path = os.path.join(examples_dir, "demo_raw.pptx")
     if not os.path.exists(sample_path):
@@ -202,7 +206,7 @@ async def get_sample_pptx():
     return FileResponse(
         sample_path,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        filename="sample_legacy_pitch.pptx",
+        filename="sample_12slide_archetypes.pptx" if "sample_12slide" in sample_path else "sample_legacy_pitch.pptx",
     )
 
 

@@ -4,6 +4,15 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.dml import MSO_FILL
 from typing import Dict, List, Any, Optional, Generator, Tuple
 
+try:
+    from brandmorph.engine.archetype_engine import SlideGraphClassifier
+except ImportError:
+    try:
+        from .brandmorph.engine.archetype_engine import SlideGraphClassifier
+    except ImportError:
+        SlideGraphClassifier = None
+
+# Minimum dimension in inches to avoid zero-division / negative-extent bugs
 _MIN_EXTENT = 0.05
 
 def _color_to_hex(color_obj) -> Optional[str]:
@@ -82,15 +91,24 @@ class SlideDecompiler:
 
             full_text = " ".join(slide_text_accumulator)
 
+            archetype_name = "Multi-Card Content"
+            if SlideGraphClassifier:
+                try:
+                    archetype = SlideGraphClassifier.classify(slide, index, len(self.prs.slides))
+                    archetype_name = archetype.value
+                except Exception:
+                    pass
+
             slide_ast = {
                 "slide_id": index + 1,
+                "archetype": archetype_name,
                 "dimensions": {"width": self.slide_width, "height": self.slide_height},
                 "full_text": full_text,
                 "bg_image": bg_image_base64,
                 "nodes": nodes
             }
             parsed_slides.append(slide_ast)
-            
+
         return parsed_slides
 
     def _extract_shape_data(
@@ -107,8 +125,10 @@ class SlideDecompiler:
         shape_id = getattr(shape, "shape_id", 0)
         shape_type = getattr(shape, "shape_type", None)
 
+        shape_name_str = getattr(shape, "name", "") or ""
         base_data: Dict[str, Any] = {
             "id": shape_id,
+            "name": shape_name_str,
             "x": left,
             "y": top,
             "w": width,
@@ -142,25 +162,49 @@ class SlideDecompiler:
             base_data["line_hex"] = line_hex
             base_data["line_color"] = line_hex
 
-        # 1. Picture / Image Shape (Issue #6: Extract blob and data URI)
+        # Check for bottom frame
+        if "BrandMorphBottomFrame" in shape_name_str or "BrandMorphAccentLine" in shape_name_str:
+            base_data["type"] = "RECTANGLE_SHAPE"
+            base_data["shape_name"] = "BrandMorphBottomFrame"
+            return base_data
+
+        # 1. Check for Picture / Image FIRST (so picture placeholders are not swallowed by has_text_frame)
         is_picture = False
+        image_bytes = None
+        content_type = "image/png"
         try:
             if shape_type == MSO_SHAPE_TYPE.PICTURE or hasattr(shape, "image"):
                 if getattr(shape, "image", None) is not None:
                     is_picture = True
+                    image_bytes = shape.image.blob
+                    content_type = getattr(shape.image, "content_type", None) or f"image/{getattr(shape.image, 'ext', 'png')}"
         except Exception:
             pass
 
-        if is_picture:
+        if not is_picture:
             try:
-                image_bytes = shape.image.blob
+                # Check for picture placeholder or blip in shape element
+                blips = shape.element.xpath('.//a:blip')
+                if blips:
+                    r_id = blips[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                    if r_id and hasattr(shape, "part") and r_id in shape.part.related_parts:
+                        rel = shape.part.related_parts[r_id]
+                        if hasattr(rel, "blob"):
+                            image_bytes = rel.blob
+                            content_type = getattr(rel, "content_type", "image/png")
+                            is_picture = True
+            except Exception:
+                pass
+
+        if is_picture and image_bytes:
+            try:
                 image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-                content_type = getattr(shape.image, "content_type", None) or f"image/{getattr(shape.image, 'ext', 'png')}"
                 data_uri = f"data:{content_type};base64,{image_base64}"
                 base_data["type"] = "PICTURE"
                 base_data["image_data_uri"] = data_uri
                 base_data["image_src"] = data_uri
                 base_data["image_data"] = data_uri
+                base_data["image_data_uri"] = data_uri
                 return base_data
             except Exception:
                 pass

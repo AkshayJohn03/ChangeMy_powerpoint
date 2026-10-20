@@ -24,6 +24,7 @@ from .copy import CopyToneRewriter, LLMClient
 from .fit import FitGuard
 from .fonts import FontRoleMapper
 from .format_mapper import DirectFormatMapper
+from .archetype_engine import ArchetypeEngine
 from .governance import CorporateGovernancePass
 from .safety import validate_deck
 from .theme import transform as transform_theme
@@ -56,7 +57,7 @@ class MorphPipeline:
         prs = Presentation(str(source))
         DirectFormatMapper(self.dna, report).run(prs)
         FontRoleMapper(self.dna, report).run(prs)
-        CorporateGovernancePass(self.dna, report).run(prs)
+        ArchetypeEngine(self.dna, report).run(prs)
 
         rewrite = (
             opts.rewrite_copy if opts.rewrite_copy is not None else self.dna.rules.rewrite_copy

@@ -27,6 +27,7 @@ node_modules/
 !.env.example
 .mcp.json
 .vercel
+!backend/samples/sample_12slide_archetypes.pptx
 
 # IDE / OS
 .vscode/

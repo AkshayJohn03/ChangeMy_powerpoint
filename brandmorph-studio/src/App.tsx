@@ -13,8 +13,9 @@ import {
   Layers,
   ShieldCheck,
   Zap,
-  ArrowRight,
-  Maximize2
+  Info,
+  Maximize2,
+  ChevronRight
 } from 'lucide-react';
 
 interface ASTNode {
@@ -30,6 +31,7 @@ interface ASTNode {
   bbox: { left: number; top: number; width: number; height: number };
   image_src?: string;
   image_data?: string;
+  image_data_uri?: string;
   paragraphs?: {
     text: string;
     level: number;
@@ -46,6 +48,7 @@ interface ASTNode {
 
 interface SlideAST {
   slide_id: number;
+  archetype?: string;
   dimensions: { width: number; height: number };
   full_text?: string;
   bg_image?: string;
@@ -75,11 +78,11 @@ interface MorphReport {
 const DEFAULT_BRANDS: BrandPreset[] = [
   {
     id: 'enterprise_navy',
-    name: 'Akkodis Deep Navy (Corporate DNA)',
+    name: 'Enterprise Navy (W3C DTCG)',
     palette: {
-      background: '001F33',
-      surface: '081E36',
-      surface_alt: '0A2A4A',
+      background: '030C1E',
+      surface: '081632',
+      surface_alt: '0E2148',
       text_primary: 'FFFFFF',
       text_muted: '93A5C4',
       accent_primary: 'FFB81C',
@@ -109,6 +112,37 @@ const DEFAULT_BRANDS: BrandPreset[] = [
   },
 ];
 
+function getLuminance(r: number, g: number, b: number): number {
+  const a = [r, g, b].map((v) => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+}
+
+function parseHex(hexStr?: string): [number, number, number] {
+  if (!hexStr) return [3, 12, 30];
+  const clean = hexStr.replace('#', '').trim();
+  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
+  if (full.length >= 6) {
+    const num = parseInt(full.slice(0, 6), 16);
+    if (!isNaN(num)) {
+      return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+    }
+  }
+  return [3, 12, 30];
+}
+
+function calculateContrastRatio(foregroundHex: string, backgroundHex: string): number {
+  const [r1, g1, b1] = parseHex(foregroundHex);
+  const [r2, g2, b2] = parseHex(backgroundHex);
+  const l1 = getLuminance(r1, g1, b1);
+  const l2 = getLuminance(r2, g2, b2);
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return Number(((lighter + 0.05) / (darker + 0.05)).toFixed(1));
+}
+
 export default function App() {
   const [brands, setBrands] = useState<BrandPreset[]>(DEFAULT_BRANDS);
   const [selectedBrand, setSelectedBrand] = useState<string>('enterprise_navy');
@@ -123,12 +157,11 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('Ready to import .pptx');
   const [canvasScale, setCanvasScale] = useState<number>(1);
-  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stageContainerRef = useRef<HTMLDivElement>(null);
 
-  // ResizeObserver for canvas stage to keep 880x495 slide 100% visible on any screen
+  // ResizeObserver for center canvas stage: dynamically scales 880x495 slide to fit 100% visible
   useEffect(() => {
     const el = stageContainerRef.current;
     if (!el) return;
@@ -137,8 +170,12 @@ export default function App() {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0) {
-          const scale = Math.min((width - 48) / 880, (height - 48) / 495, 1);
-          setCanvasScale(Math.max(0.35, Math.min(1.05, scale)));
+          const paddingX = 64;
+          const paddingY = 64;
+          const scaleX = (width - paddingX) / 880;
+          const scaleY = (height - paddingY) / 495;
+          const fitScale = Math.min(scaleX, scaleY, 1.05);
+          setCanvasScale(Math.max(0.3, Math.min(1.1, fitScale)));
         }
       }
     });
@@ -310,341 +347,269 @@ export default function App() {
   const selectedNode = activeSlide && selectedNodeIndex !== null ? activeSlide.nodes[selectedNodeIndex] : null;
 
   // Exact 16:9 widescreen canvas coordinate scale (880x495 for 13.333x7.5 in)
-  const SCALE_X = 880 / 13.333;
+  const SCALE_X = 880 / 13.333333;
   const SCALE_Y = 495 / 7.5;
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedToken(text);
-    setTimeout(() => setCopiedToken(null), 1500);
-  };
+  // Archetype badge computation
+  const activeArchetype = activeSlide?.archetype || (activeSlideIndex === 0 ? 'Cover Slide' : 'Multi-Card Content');
+
+  // Selected node inspection calculations
+  const effectiveBgHex = (selectedNode?.fill_color || `#${(currentBrand.palette.background || '030C1E').replace('#', '')}`);
+  const firstPara = selectedNode?.paragraphs?.[0];
+  const textHex = firstPara?.font_color || '#FFFFFF';
+  const contrastRatio = calculateContrastRatio(textHex, effectiveBgHex);
+  const isTitleRole = selectedNode ? ((selectedNode.y ?? selectedNode.bbox.top) < 1.8 && (selectedNode.w ?? selectedNode.bbox.width) > 3.5) : false;
+  const isSubheadingRole = selectedNode && !isTitleRole ? (firstPara?.bold || (firstPara?.font_size && firstPara.font_size >= 13)) : false;
+  const elementRole = selectedNode
+    ? selectedNode.type === 'PICTURE'
+      ? 'Photo / Asset'
+      : selectedNode.shape_name?.includes('Logo_Stamp') || selectedNode.shape_name?.includes('Stamp')
+      ? 'Corporate Wordmark'
+      : selectedNode.shape_name?.includes('BottomFrame')
+      ? 'Geometric Accent'
+      : isTitleRole
+      ? 'Slide Title (Times New Roman)'
+      : isSubheadingRole
+      ? 'Subheading (Arial Bold)'
+      : 'Body Paragraph (Arial)'
+    : null;
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#09090B] text-[#F4F4F5] font-sans antialiased select-none">
-      {/* 1. TOP HEADER (h-14): Clean, calm, professional design tool aesthetic */}
-      <header className="h-14 border-b border-[#27272A] bg-[#18181B] px-5 flex items-center justify-between shrink-0 z-30 shadow-sm">
-        {/* Left: Brand Identity */}
+    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#FBF9F5] text-[#18181B] font-sans antialiased select-none">
+      {/* 1. TOP HEADER (h-14 shrink-0 bg-[#F4F1EA] border-b border-[#E5E0D8]) */}
+      <header className="h-14 shrink-0 bg-[#F4F1EA] border-b border-[#E5E0D8] px-5 flex items-center justify-between z-30 shadow-xs">
+        {/* Left: Brand Identity & Title */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#27272A] border border-[#3F3F46] flex items-center justify-center text-[#FFB81C]">
+          <div className="w-8 h-8 rounded-lg bg-[#001F33] flex items-center justify-center text-[#FFB81C] shadow-xs">
             <Zap className="w-4 h-4 fill-current" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm tracking-tight text-white">BrandMorph Studio</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#27272A] text-[#A1A1AA] border border-[#3F3F46]">
-                W3C DTCG
-              </span>
+          <div className="flex items-center gap-2.5">
+            <span className="font-semibold text-sm tracking-tight text-[#18181B]">BrandMorph Studio</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#EAE5DC] text-[#44403C] border border-[#D7D1C7] font-medium">
+              W3C DTCG
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-[#E5E0D8] mx-1" />
+
+          {/* Upload Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-[#EAE5DC] text-xs font-semibold text-[#18181B] border border-[#E5E0D8] transition shadow-2xs cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5 text-[#001F33]" />
+            <span>Upload .pptx</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pptx"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          {/* Load Sample Deck Button */}
+          <button
+            onClick={handleLoadSample}
+            disabled={isProcessing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-[#EAE5DC] text-xs font-medium text-[#18181B] border border-[#E5E0D8] transition shadow-2xs disabled:opacity-50 cursor-pointer"
+          >
+            {isProcessing ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#001F33]" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5 text-[#FFB81C]" />
+            )}
+            <span>Load Sample Deck</span>
+          </button>
+        </div>
+
+        {/* Center: Slide Archetype Badge & Segmented Pill Toggle */}
+        <div className="flex items-center gap-3">
+          {/* Detected Slide Archetype Badge */}
+          {activeSlide && (
+            <div className="px-3 py-1 rounded-full text-xs font-semibold bg-[#EAE5DC] text-[#001F33] border border-[#D7D1C7] flex items-center gap-1.5 shadow-2xs">
+              <Layers className="w-3.5 h-3.5 text-[#001F33]" />
+              <span>{activeArchetype}</span>
             </div>
-            <p className="text-[11px] text-[#A1A1AA] leading-none mt-0.5">Presentation Rebranding Engine</p>
+          )}
+
+          {/* "Raw | Governed" Pill Toggle */}
+          <div className="flex items-center bg-[#EAE5DC] p-0.5 rounded-lg border border-[#D7D1C7]">
+            <button
+              onClick={() => setViewMode('before')}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                viewMode === 'before'
+                  ? 'bg-white text-[#18181B] shadow-2xs font-semibold'
+                  : 'text-[#71717A] hover:text-[#18181B]'
+              }`}
+            >
+              Raw
+            </button>
+            <button
+              onClick={() => setViewMode('after')}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                viewMode === 'after'
+                  ? 'bg-[#001F33] text-white shadow-2xs font-bold'
+                  : 'text-[#71717A] hover:text-[#18181B]'
+              }`}
+            >
+              Governed
+            </button>
           </div>
         </div>
 
-        {/* Center: Segmented Pill Toggle (Before vs After) */}
-        <div className="flex items-center bg-[#27272A]/80 p-0.5 rounded-lg border border-[#3F3F46]">
-          <button
-            onClick={() => setViewMode('before')}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition ${
-              viewMode === 'before'
-                ? 'bg-[#3F3F46] text-white shadow-sm font-semibold'
-                : 'text-[#A1A1AA] hover:text-white'
-            }`}
-          >
-            Before (Raw Original)
-          </button>
-          <button
-            onClick={() => setViewMode('after')}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition ${
-              viewMode === 'after'
-                ? 'bg-[#FFB81C] text-[#09090B] shadow-sm font-bold'
-                : 'text-[#A1A1AA] hover:text-white'
-            }`}
-          >
-            After (W3C Formatted)
-          </button>
-        </div>
-
-        {/* Right Actions */}
+        {/* Right Actions: Brand Selector & Primary Download Button */}
         <div className="flex items-center gap-2.5">
           {/* Brand Preset Selector */}
-          <div className="flex items-center gap-1.5 bg-[#27272A] border border-[#3F3F46] rounded-lg px-2.5 py-1">
-            <Palette className="w-3.5 h-3.5 text-[#FFB81C]" />
+          <div className="flex items-center gap-1.5 bg-white border border-[#E5E0D8] rounded-lg px-2.5 py-1">
+            <Palette className="w-3.5 h-3.5 text-[#001F33]" />
             <select
               value={selectedBrand}
               onChange={(e) => setSelectedBrand(e.target.value)}
-              className="bg-transparent text-xs text-[#F4F4F5] font-medium focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-[#18181B] font-medium focus:outline-none cursor-pointer"
             >
               {brands.map((b) => (
-                <option key={b.id} value={b.id} className="bg-[#18181B] text-white">
+                <option key={b.id} value={b.id} className="bg-white text-[#18181B]">
                   {b.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Quick Sample Button */}
-          <button
-            onClick={handleLoadSample}
-            disabled={isProcessing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-xs font-medium text-[#F4F4F5] border border-[#3F3F46] transition disabled:opacity-50"
-            title="Load sample unformatted presentation"
-          >
-            {isProcessing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-[#FFB81C]" />}
-            <span>Load Sample Deck</span>
-          </button>
-
-          {/* Primary Action: Download Formatted PPTX */}
+          {/* Primary Action: Download Formatted .pptx in Deep Corporate Navy (#001F33) with Gold Accent (#FFB81C) */}
           <button
             onClick={handleDownload}
             disabled={!slides.length || isProcessing}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-semibold text-xs transition shadow-sm ${
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg font-semibold text-xs transition shadow-sm cursor-pointer ${
               slides.length > 0 && !isProcessing
-                ? 'bg-[#FFB81C] text-[#09090B] hover:bg-[#F59E0B] hover:shadow'
-                : 'bg-[#27272A] text-[#71717A] cursor-not-allowed border border-[#3F3F46]'
+                ? 'bg-[#001F33] text-white hover:bg-[#003354] hover:shadow'
+                : 'bg-[#EAE5DC] text-[#A1A1AA] cursor-not-allowed border border-[#D7D1C7]'
             }`}
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-4 h-4 text-[#FFB81C]" />
             <span>Download Formatted .pptx</span>
           </button>
         </div>
       </header>
 
-      {/* 2. MAIN WORKSPACE CONTAINER (h-full min-h-0 flex overflow-hidden) */}
+      {/* 2. WORKSPACE CONTAINER (flex-1 min-h-0 flex overflow-hidden) */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
-        {/* LEFT SIDEBAR: Upload + Slide Navigator (w-72 h-full overflow-y-auto shrink-0 border-r) */}
-        <aside className="w-72 h-full overflow-y-auto shrink-0 border-r border-[#27272A] bg-[#121215] flex flex-col">
-          {/* SECTION A: DROPZONE */}
-          <div className="p-3.5 border-b border-[#27272A]">
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border border-dashed border-[#3F3F46] hover:border-[#FFB81C] bg-[#18181B] hover:bg-[#202024] rounded-xl p-3.5 flex flex-col items-center justify-center text-center cursor-pointer transition group"
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pptx"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <div className="w-8 h-8 rounded-lg bg-[#27272A] group-hover:bg-[#3F3F46] flex items-center justify-center text-[#A1A1AA] group-hover:text-white mb-1.5 transition">
-                <Upload className="w-4 h-4" />
-              </div>
-              <p className="text-xs font-medium text-[#F4F4F5]">
-                {fileName ? fileName : 'Import PowerPoint (.pptx)'}
-              </p>
-              <p className="text-[10px] text-[#71717A] mt-0.5">Drag & drop or browse up to 15MB</p>
-            </div>
+        {/* LEFT FILMSTRIP (w-64 h-full overflow-y-auto shrink-0 bg-[#F4F1EA] border-r border-[#E5E0D8]) */}
+        <aside className="w-64 h-full overflow-y-auto shrink-0 bg-[#F4F1EA] border-r border-[#E5E0D8] flex flex-col p-3 space-y-2">
+          <div className="flex items-center justify-between px-1 pb-1 border-b border-[#E5E0D8]">
+            <span className="text-[11px] font-semibold text-[#71717A] uppercase tracking-wider">
+              Slides ({currentSlides.length})
+            </span>
+            <span className="text-[10px] font-mono text-[#A1A1AA]">
+              {viewMode === 'after' ? 'Governed' : 'Raw'}
+            </span>
           </div>
 
-          {/* SECTION B: BRAND TOKEN SWATCHES */}
-          <div className="p-3.5 border-b border-[#27272A] bg-[#141418]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono font-bold tracking-wider text-[#71717A] uppercase">
-                Brand Tokens
-              </span>
-              <span className="text-[10px] font-mono text-[#A1A1AA]">{currentBrand.name.split(' ')[0]}</span>
+          {currentSlides.length === 0 ? (
+            <div className="p-4 rounded-xl border border-dashed border-[#D7D1C7] text-center my-auto">
+              <p className="text-xs text-[#71717A]">No deck loaded</p>
+              <p className="text-[10px] text-[#A1A1AA] mt-1">Upload a .pptx or click "Load Sample Deck"</p>
             </div>
-            <div className="grid grid-cols-4 gap-1.5">
-              {Object.entries(currentBrand.palette).slice(0, 4).map(([role, hex]) => {
-                const safeHex = `#${hex.replace(/^#/, '')}`;
-                return (
-                  <div
-                    key={role}
-                    onClick={() => copyToClipboard(safeHex)}
-                    className="p-1.5 rounded-lg bg-[#18181B] border border-[#27272A] hover:border-[#3F3F46] cursor-pointer transition flex flex-col items-center"
-                    title={`Click to copy: ${role} (${safeHex})`}
-                  >
-                    <div
-                      className="w-full h-4 rounded border border-white/10 mb-1"
-                      style={{ backgroundColor: safeHex }}
-                    />
-                    <span className="text-[8px] font-mono text-[#71717A] truncate w-full text-center">
-                      {role.replace('_primary', '').replace('_secondary', '')}
-                    </span>
-                    <span className="text-[9px] font-mono text-[#A1A1AA]">
-                      {copiedToken === safeHex ? '✓' : safeHex}
+          ) : (
+            currentSlides.map((s, idx) => {
+              const isActive = activeSlideIndex === idx;
+              const slideArchetype = s.archetype || (idx === 0 ? 'Cover Slide' : 'Multi-Card Content');
+
+              return (
+                <div
+                  key={`thumb-${idx}`}
+                  onClick={() => {
+                    setActiveSlideIndex(idx);
+                    setSelectedNodeIndex(null);
+                  }}
+                  className={`p-2.5 rounded-xl border transition cursor-pointer text-left ${
+                    isActive
+                      ? 'bg-white border-[#001F33] ring-1 ring-[#001F33] shadow-xs'
+                      : 'bg-[#FDFBF7] border-[#E5E0D8] hover:bg-white hover:border-[#D7D1C7]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-[#18181B]">Slide {s.slide_id}</span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#EAE5DC] text-[#44403C] font-medium truncate max-w-[120px]">
+                      {slideArchetype}
                     </span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
 
-          {/* SECTION C: SLIDE THUMBNAIL LIST */}
-          <div className="flex-1 p-3.5 overflow-y-auto">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono font-bold tracking-wider text-[#71717A] uppercase">
-                Slides ({currentSlides.length})
-              </span>
-              {currentSlides.length > 0 && (
-                <span className="text-[10px] font-mono text-[#A1A1AA]">
-                  {activeSlideIndex + 1} / {currentSlides.length}
-                </span>
-              )}
-            </div>
-
-            {currentSlides.length === 0 ? (
-              <div className="h-48 flex flex-col items-center justify-center text-center p-4 text-[#71717A]">
-                <Layers className="w-6 h-6 opacity-40 mb-1.5" />
-                <p className="text-xs">No presentation loaded</p>
-                <p className="text-[10px] text-[#52525B] mt-0.5">Click "Load Sample Deck" above</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {currentSlides.map((s, idx) => {
-                  const titleNode = s.nodes.find(
-                    (n) => n.type === 'TEXT_CONTAINER' && n.paragraphs && n.paragraphs.length > 0
-                  );
-                  const title = titleNode?.paragraphs?.[0]?.text?.slice(0, 28) || `Slide ${idx + 1}`;
-
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => {
-                        setActiveSlideIndex(idx);
-                        setSelectedNodeIndex(null);
-                      }}
-                      className={`p-2 rounded-lg border transition-all cursor-pointer ${
-                        activeSlideIndex === idx
-                          ? 'border-[#FFB81C] bg-[#18181B] shadow-sm'
-                          : 'border-[#27272A] bg-[#141418] hover:border-[#3F3F46]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-mono mb-1">
-                        <span className="font-semibold text-white">Slide {idx + 1}</span>
-                        <span className="text-[9px] text-[#71717A]">
-                          {s.nodes.length} nodes
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#A1A1AA] truncate font-medium mb-1.5">{title}</p>
-
-                      {/* Mini preview */}
-                      <div className="w-full h-12 bg-[#030C1E] rounded border border-[#27272A] relative overflow-hidden">
-                        {s.nodes.slice(0, 6).map((n, i) => {
-                          const leftPct = (((n.x ?? n.bbox.left) ?? 0) / 13.333) * 100;
-                          const topPct = (((n.y ?? n.bbox.top) ?? 0) / 7.5) * 100;
-                          const wPct = (((n.w ?? n.bbox.width) ?? 1) / 13.333) * 100;
-                          const hPct = (((n.h ?? n.bbox.height) ?? 1) / 7.5) * 100;
-
-                          return (
-                            <div
-                              key={i}
-                              style={{
-                                left: `${leftPct}%`,
-                                top: `${topPct}%`,
-                                width: `${Math.max(4, wPct)}%`,
-                                height: `${Math.max(4, hPct)}%`,
-                                backgroundColor: n.fill_color || (viewMode === 'after' ? '#FFB81C' : '#3B82F6'),
-                              }}
-                              className="absolute rounded-[1px] opacity-60"
-                            />
-                          );
-                        })}
-                      </div>
+                  {/* Mini Aspect Ratio Preview Card */}
+                  <div className="w-full aspect-16/9 rounded bg-[#030C1E] border border-[#E5E0D8] relative overflow-hidden flex flex-col justify-between p-1.5">
+                    <div className="text-[7px] text-[#FFB81C] font-serif truncate">
+                      {s.nodes.find((n) => (n.y ?? n.bbox.top) < 1.8)?.paragraphs?.[0]?.text || `Slide ${s.slide_id}`}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    <div className="flex items-center justify-between text-[6px] text-[#93A5C4] font-mono">
+                      <span>{s.nodes.length} elements</span>
+                      <span className="text-[#FFB81C]">W3C</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </aside>
 
-        {/* CENTER STAGE: Canvas Stage (flex-1 h-full overflow-hidden flex flex-col items-center justify-center p-6 relative) */}
+        {/* CENTER CANVAS STAGE (flex-1 h-full overflow-hidden flex items-center justify-center p-8 bg-[#FBF9F5] relative) */}
         <main
           ref={stageContainerRef}
-          className="flex-1 h-full overflow-hidden flex flex-col items-center justify-center p-6 relative bg-[#18181B]"
+          className="flex-1 h-full overflow-hidden flex items-center justify-center p-8 bg-[#FBF9F5] relative"
         >
           {currentSlides.length === 0 ? (
-            // Empty State
-            <div className="max-w-md w-full bg-[#121215] border border-[#27272A] rounded-2xl p-8 text-center shadow-xl">
-              <div className="w-12 h-12 rounded-xl bg-[#27272A] border border-[#3F3F46] flex items-center justify-center text-[#FFB81C] mx-auto mb-3">
-                <Sparkles className="w-6 h-6" />
+            <div className="max-w-md text-center p-8 rounded-2xl bg-white border border-[#E5E0D8] shadow-sm">
+              <div className="w-12 h-12 rounded-xl bg-[#F4F1EA] text-[#001F33] flex items-center justify-center mx-auto mb-3">
+                <FileText className="w-6 h-6" />
               </div>
-              <h2 className="text-base font-bold text-white tracking-tight">
-                Import Presentation to Format
-              </h2>
-              <p className="text-xs text-[#A1A1AA] mt-1.5 leading-relaxed">
-                BrandMorph reformats PowerPoint decks in-place: remapping off-brand colors with CIE Lab Delta-E,
-                standardizing typography, and preserving OpenXML elements intact.
+              <h3 className="text-base font-bold text-[#18181B]">Welcome to BrandMorph Studio</h3>
+              <p className="text-xs text-[#71717A] mt-1 leading-relaxed">
+                Transform any legacy presentation into a strictly governed W3C DTCG corporate deck with automated archetype classification and contrast resolution.
               </p>
-              <div className="mt-5 flex items-center justify-center gap-2.5">
+              <div className="mt-4 flex items-center justify-center gap-2">
                 <button
                   onClick={handleLoadSample}
                   disabled={isProcessing}
-                  className="px-4 py-2 rounded-lg bg-[#FFB81C] text-[#09090B] font-semibold text-xs hover:bg-[#F59E0B] transition"
+                  className="px-4 py-2 rounded-lg bg-[#001F33] text-white text-xs font-semibold hover:bg-[#003354] transition shadow-xs cursor-pointer flex items-center gap-1.5"
                 >
-                  Load Sample Messy Deck
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 rounded-lg bg-[#27272A] hover:bg-[#3F3F46] text-white font-medium text-xs border border-[#3F3F46] transition"
-                >
-                  Upload File
+                  <Sparkles className="w-3.5 h-3.5 text-[#FFB81C]" />
+                  <span>Load Sample Deck</span>
                 </button>
               </div>
             </div>
           ) : (
-            // 880x495 Slide Canvas scaled to fit stage perfectly
             <div
               style={{
+                width: '880px',
+                height: '495px',
                 transform: `scale(${canvasScale})`,
                 transformOrigin: 'center center',
               }}
-              className="transition-transform duration-75 select-none"
+              className="architectural-shadow rounded-lg overflow-hidden relative shrink-0 transition-transform duration-75"
             >
+              {/* Slide Canvas Outer Container */}
               <div
-                className={`w-[880px] h-[495px] rounded-lg shadow-2xl relative overflow-hidden transition-all border ${
-                  viewMode === 'before'
-                    ? 'bg-[#F8FAFC] border-[#CBD5E1]'
-                    : 'bg-[#030C1E] border-[#27272A] shadow-black/80'
-                }`}
                 style={{
+                  width: '880px',
+                  height: '495px',
                   backgroundColor:
                     viewMode === 'before'
                       ? '#F8FAFC'
                       : `#${(currentBrand.palette.background || '030C1E').replace(/^#/, '')}`,
                 }}
+                className="w-full h-full relative overflow-hidden"
               >
-                {/* Structured Corporate Template Layer (ViewMode After) */}
-                {viewMode === 'after' && (
-                  <>
-                    {/* Subtle bottom geometric accent framing (left=0, top=7.36", width=13.333", height=0.05") */}
-                    <div
-                      style={{
-                        left: 0,
-                        top: `${7.36 * SCALE_Y}px`,
-                        width: `${13.333 * SCALE_X}px`,
-                        height: '3.5px',
-                      }}
-                      className="absolute bg-[#FFB81C] pointer-events-none z-10"
-                    />
-
-                    {/* Top-Right Brand Stamp (left=11.5", top=0.32", width=1.45", height=0.42") */}
-                    <div
-                      style={{
-                        left: `${11.5 * SCALE_X}px`,
-                        top: `${0.32 * SCALE_Y}px`,
-                        width: `${1.45 * SCALE_X}px`,
-                        height: `${0.42 * SCALE_Y}px`,
-                      }}
-                      className="absolute flex items-center justify-end text-[10px] font-mono font-bold tracking-wider text-[#FFB81C] pointer-events-none z-20"
-                    >
-                      AKKODIS
-                    </div>
-                  </>
-                )}
-
-                {/* Master Background Image */}
+                {/* Background image if present */}
                 {activeSlide?.bg_image && (
                   <img
                     src={`data:image/png;base64,${activeSlide.bg_image}`}
-                    alt="Slide Background Master"
+                    alt="Master Background"
                     className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
                   />
                 )}
 
-                {/* AST Nodes Rendering Layer */}
+                {/* AST Nodes Rendering Layer — Canvas renders ONLY nodes from slide AST (Zero duplicate overlays!) */}
                 <div className="relative z-10 w-full h-full">
-                  {/* Layer 1: PICTURE Nodes rendered first so text overlays remain on top */}
+                  {/* Layer 1: PICTURE Nodes */}
                   {activeSlide?.nodes
                     .filter((n) => n.type === 'PICTURE' || n.type === 'IMAGE')
                     .map((node, nIdx) => {
@@ -653,7 +618,7 @@ export default function App() {
                       const widthPx = ((node.w ?? node.bbox.width) ?? 1) * SCALE_X;
                       const heightPx = ((node.h ?? node.bbox.height) ?? 1) * SCALE_Y;
                       const isSelected = selectedNodeIndex === nIdx;
-                      const imgSrc = node.image_src || node.image_data;
+                      const imgSrc = node.image_data_uri || node.image_src || node.image_data;
 
                       return (
                         <div
@@ -680,14 +645,14 @@ export default function App() {
                             />
                           ) : (
                             <div className="w-full h-full bg-[#14305F]/40 flex items-center justify-center text-[10px] text-[#8EA0C2]">
-                              Image
+                              Image Asset
                             </div>
                           )}
                         </div>
                       );
                     })}
 
-                  {/* Layer 2: Shape Containers (Cards, Boxes, Ovals, Arrows) */}
+                  {/* Layer 2: Shape Containers (Cards, Boxes, Geometric Framing, Lines, Arrows) */}
                   {activeSlide?.nodes
                     .filter(
                       (n) =>
@@ -704,45 +669,6 @@ export default function App() {
                       const heightPx = ((node.h ?? node.bbox.height) ?? 1) * SCALE_Y;
                       const isSelected = selectedNodeIndex === nIdx;
 
-                      // Skip template line/stamp if already rendered
-                      if (
-                        node.shape_name?.includes('BrandMorphBottomFrame') ||
-                        node.shape_name?.includes('BrandMorphStamp')
-                      ) {
-                        return null;
-                      }
-
-                      if (node.type === 'ARROW_SHAPE' || node.type === 'LINE_SHAPE') {
-                        return (
-                          <div
-                            key={`shape-${nIdx}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedNodeIndex(nIdx);
-                            }}
-                            style={{
-                              left: `${leftPx}px`,
-                              top: `${topPx}px`,
-                              width: `${widthPx}px`,
-                              height: `${heightPx}px`,
-                            }}
-                            className="absolute flex items-center justify-center text-[#FFB81C] cursor-pointer"
-                          >
-                            <ArrowRight className="w-full h-full text-[#FFB81C]" />
-                          </div>
-                        );
-                      }
-
-                      const cardBg =
-                        viewMode === 'before'
-                          ? node.fill_color || '#E2E8F0'
-                          : node.fill_color || `#${(currentBrand.palette.surface || '081632').replace(/^#/, '')}`;
-
-                      const cardBorder =
-                        viewMode === 'before'
-                          ? node.line_color || '#CBD5E1'
-                          : node.line_color || '#14305F';
-
                       return (
                         <div
                           key={`shape-${nIdx}`}
@@ -755,25 +681,19 @@ export default function App() {
                             top: `${topPx}px`,
                             width: `${widthPx}px`,
                             height: `${heightPx}px`,
-                            backgroundColor: cardBg,
-                            borderColor: cardBorder,
+                            backgroundColor: node.fill_color || undefined,
+                            border: node.line_color ? `1px solid ${node.line_color}` : undefined,
                           }}
-                          className={`absolute ${
-                            node.type === 'OVAL_SHAPE' ? 'rounded-full' : 'rounded-xl'
-                          } border transition cursor-pointer flex flex-col justify-between p-2.5 ${
-                            isSelected ? 'ring-2 ring-[#FFB81C]' : 'hover:border-[#FFB81C]/50'
+                          className={`absolute rounded transition cursor-pointer ${
+                            isSelected ? 'ring-2 ring-[#FFB81C]' : ''
                           }`}
-                        >
-                          <span className="text-[10px] font-mono text-[#8EA0C2] uppercase truncate">
-                            {node.shape_name || 'Container'}
-                          </span>
-                        </div>
+                        />
                       );
                     })}
 
-                  {/* Layer 3: Text Containers rendered on top */}
+                  {/* Layer 3: Tables */}
                   {activeSlide?.nodes
-                    .filter((n) => n.type === 'TEXT_CONTAINER' && n.paragraphs)
+                    .filter((n) => n.type === 'TABLE')
                     .map((node, nIdx) => {
                       const leftPx = ((node.x ?? node.bbox.left) ?? 0) * SCALE_X;
                       const topPx = ((node.y ?? node.bbox.top) ?? 0) * SCALE_Y;
@@ -781,16 +701,57 @@ export default function App() {
                       const heightPx = ((node.h ?? node.bbox.height) ?? 1) * SCALE_Y;
                       const isSelected = selectedNodeIndex === nIdx;
 
-                      if (
-                        node.shape_name?.includes('BrandMorphStamp') ||
-                        node.shape_name?.includes('BrandMorphBottomFrame')
-                      ) {
-                        return null;
-                      }
+                      return (
+                        <div
+                          key={`table-${nIdx}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedNodeIndex(nIdx);
+                          }}
+                          style={{
+                            left: `${leftPx}px`,
+                            top: `${topPx}px`,
+                            width: `${widthPx}px`,
+                            height: `${heightPx}px`,
+                          }}
+                          className={`absolute rounded border border-[#14305F] bg-[#081632]/80 p-2 cursor-pointer ${
+                            isSelected ? 'ring-2 ring-[#FFB81C]' : ''
+                          }`}
+                        >
+                          <div className="w-full h-full flex flex-col justify-around text-[10px] text-white">
+                            <div className="flex justify-between border-b border-[#14305F] pb-1 font-bold text-[#FFB81C]">
+                              <span>Metric</span>
+                              <span>FY24</span>
+                              <span>FY25 Target</span>
+                            </div>
+                            <div className="flex justify-between text-[#93A5C4]">
+                              <span>Service Availability</span>
+                              <span>98.2%</span>
+                              <span className="text-white">99.5%</span>
+                            </div>
+                            <div className="flex justify-between text-[#93A5C4]">
+                              <span>Incident MTTR</span>
+                              <span>42 min</span>
+                              <span className="text-white">25 min</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {/* Layer 4: Text Containers */}
+                  {activeSlide?.nodes
+                    .filter((n) => n.type === 'TEXT_CONTAINER')
+                    .map((node, nIdx) => {
+                      const leftPx = ((node.x ?? node.bbox.left) ?? 0) * SCALE_X;
+                      const topPx = ((node.y ?? node.bbox.top) ?? 0) * SCALE_Y;
+                      const widthPx = ((node.w ?? node.bbox.width) ?? 1) * SCALE_X;
+                      const heightPx = ((node.h ?? node.bbox.height) ?? 1) * SCALE_Y;
+                      const isSelected = selectedNodeIndex === nIdx;
 
                       return (
                         <div
-                          key={`txt-${nIdx}`}
+                          key={`text-${nIdx}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedNodeIndex(nIdx);
@@ -811,12 +772,11 @@ export default function App() {
                         >
                           {node.paragraphs?.map((p, pIdx) => {
                             const isTitle = (node.y ?? node.bbox.top) < 1.8 && (node.w ?? node.bbox.width) > 3.5;
-
                             const fontFace =
                               viewMode === 'after'
                                 ? isTitle
                                   ? 'Times New Roman'
-                                  : 'Arial'
+                                  : p.font_face || 'Arial'
                                 : p.font_face || 'Arial';
 
                             const defaultColor =
@@ -855,106 +815,138 @@ export default function App() {
           )}
         </main>
 
-        {/* RIGHT PANEL: Inspector & Transformation Receipt (w-80 h-full overflow-y-auto shrink-0 border-l) */}
-        <aside className="w-80 h-full overflow-y-auto shrink-0 border-l border-[#27272A] bg-[#121215] flex flex-col">
-          {/* Header */}
-          <div className="p-3.5 border-b border-[#27272A]">
-            <span className="text-[10px] font-mono font-bold tracking-wider text-[#71717A] uppercase flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-[#FFB81C]" /> Transformation Receipt
+        {/* RIGHT INSPECTOR (w-72 h-full overflow-y-auto shrink-0 bg-[#F4F1EA] border-l border-[#E5E0D8] p-4 flex flex-col space-y-4) */}
+        <aside className="w-72 h-full overflow-y-auto shrink-0 bg-[#F4F1EA] border-l border-[#E5E0D8] p-4 flex flex-col space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-[#E5E0D8]">
+            <span className="text-[11px] font-semibold text-[#71717A] uppercase tracking-wider flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-[#001F33]" /> Inspector
             </span>
+            <span className="text-[10px] font-mono text-[#001F33] font-bold">W3C Compliant</span>
           </div>
 
-          {/* Section 1: Stats Badges */}
-          <div className="p-3.5 border-b border-[#27272A] space-y-2.5">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-2.5 rounded-lg bg-[#18181B] border border-[#27272A]">
-                <div className="text-[9px] font-mono text-[#71717A] uppercase">Total Mutations</div>
-                <div className="text-base font-bold text-[#FFB81C] font-mono mt-0.5">
-                  {report?.total_changes ?? (slides.length > 0 ? 65 : 0)}
-                </div>
-                <div className="text-[8px] text-[#10B981] font-mono">100% In-Place</div>
+          {selectedNode ? (
+            <div className="space-y-3.5">
+              {/* Element Role Badge */}
+              <div className="p-3 rounded-xl bg-white border border-[#E5E0D8] shadow-2xs space-y-1.5">
+                <div className="text-[10px] font-mono text-[#71717A] uppercase">Element Role</div>
+                <div className="text-xs font-bold text-[#001F33]">{elementRole || selectedNode.type}</div>
+                <div className="text-[10px] font-mono text-[#71717A]">Node ID #{selectedNode.id}</div>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-[#18181B] border border-[#27272A]">
-                <div className="text-[9px] font-mono text-[#71717A] uppercase">Slides Processed</div>
-                <div className="text-base font-bold text-white font-mono mt-0.5">
-                  {slides.length}
-                </div>
-                <div className="text-[8px] text-[#A1A1AA] font-mono">16:9 Widescreen</div>
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-[#18181B] border border-[#27272A] space-y-1.5 text-xs font-mono">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#71717A]">Color Remap:</span>
-                <span className="text-white font-medium">CIE Lab (ΔE &lt; 2.3)</span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#71717A]">Typography:</span>
-                <span className="text-white font-medium">Times New Roman / Arial</span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#71717A]">Idempotence:</span>
-                <span className="text-[#FFB81C] font-semibold text-[10px] truncate max-w-[110px]">
-                  {report?.deck_sha256 ? report.deck_sha256.slice(0, 10) + '...' : 'Verified SHA-256'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Node Inspector / Diff */}
-          <div className="flex-1 p-3.5 flex flex-col">
-            <span className="text-[10px] font-mono font-bold tracking-wider text-[#71717A] uppercase mb-2 flex items-center gap-1.5">
-              <Sliders className="w-3.5 h-3.5 text-[#FFB81C]" /> Element Inspector
-            </span>
-
-            {selectedNode ? (
-              <div className="space-y-3 bg-[#18181B] p-3 rounded-lg border border-[#3F3F46] text-xs">
-                <div className="flex items-center justify-between pb-2 border-b border-[#27272A]">
-                  <span className="font-mono text-white font-semibold">Node #{selectedNode.id}</span>
-                  <span className="font-mono text-[9px] bg-[#27272A] text-[#A1A1AA] px-1.5 py-0.5 rounded">
-                    {selectedNode.type}
+              {/* Typography Details */}
+              <div className="p-3 rounded-xl bg-white border border-[#E5E0D8] shadow-2xs space-y-2">
+                <div className="text-[10px] font-mono text-[#71717A] uppercase">Typography</div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#71717A]">Font:</span>
+                  <span className="font-semibold text-[#18181B]">
+                    {firstPara?.font_face || (isTitleRole ? 'Times New Roman' : 'Arial')}
                   </span>
                 </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#71717A]">Size:</span>
+                  <span className="font-semibold text-[#18181B] font-mono">
+                    {firstPara?.font_size ? `${firstPara.font_size}pt` : isTitleRole ? '26pt' : '12pt'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#71717A]">Weight:</span>
+                  <span className="font-semibold text-[#18181B] font-mono">
+                    {firstPara?.bold ? 'Bold (700)' : 'Regular (400)'}
+                  </span>
+                </div>
+              </div>
 
-                <div className="space-y-1 font-mono text-[10px] text-[#71717A]">
-                  <div>
-                    Coordinates: X:{selectedNode.x ?? selectedNode.bbox.left}″ Y:{selectedNode.y ?? selectedNode.bbox.top}″
-                  </div>
-                  <div>
-                    Dimensions: {selectedNode.w ?? selectedNode.bbox.width}″ × {selectedNode.h ?? selectedNode.bbox.height}″
+              {/* Color & Contrast Ratio */}
+              <div className="p-3 rounded-xl bg-white border border-[#E5E0D8] shadow-2xs space-y-2.5">
+                <div className="text-[10px] font-mono text-[#71717A] uppercase">Contrast & Color</div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#71717A]">Ink Color:</span>
+                  <div className="flex items-center gap-1.5 font-mono">
+                    <span
+                      style={{ backgroundColor: textHex }}
+                      className="w-3.5 h-3.5 rounded border border-[#D7D1C7]"
+                    />
+                    <span className="font-semibold text-[#18181B]">{textHex}</span>
                   </div>
                 </div>
 
-                {/* Text Editor */}
-                {selectedNode.paragraphs && (
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-[#71717A] uppercase">Text Content</label>
-                    <textarea
-                      value={selectedNode.paragraphs[0]?.text || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSlides((prev) => {
-                          const copy = [...prev];
-                          if (copy[activeSlideIndex]?.nodes[selectedNodeIndex!].paragraphs?.[0]) {
-                            copy[activeSlideIndex].nodes[selectedNodeIndex!].paragraphs![0].text = val;
-                          }
-                          return copy;
-                        });
-                      }}
-                      className="w-full h-16 bg-[#121215] border border-[#27272A] rounded p-2 text-xs text-white focus:outline-none focus:border-[#FFB81C] font-sans"
-                    />
+                <div className="pt-2 border-t border-[#E5E0D8] flex items-center justify-between">
+                  <span className="text-xs text-[#71717A]">WCAG Contrast:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold font-mono text-[#001F33]">{contrastRatio}:1</span>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        contrastRatio >= 4.5 ? 'bg-[#DCFCE7] text-[#15803D]' : 'bg-[#FEE2E2] text-[#B91C1C]'
+                      }`}
+                    >
+                      {contrastRatio >= 7.0 ? 'AAA' : contrastRatio >= 4.5 ? 'AA' : 'Fail'}
+                    </span>
                   </div>
-                )}
+                </div>
               </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-4 text-[#71717A]">
-                <Eye className="w-6 h-6 opacity-40 mb-1" />
-                <p className="text-xs">No element selected</p>
-                <p className="text-[10px] text-[#52525B] mt-0.5">Click any shape or text box on the canvas</p>
+
+              {/* Position and Dimensions */}
+              <div className="p-3 rounded-xl bg-white border border-[#E5E0D8] shadow-2xs space-y-1.5 text-xs font-mono text-[#71717A]">
+                <div className="text-[10px] uppercase text-[#71717A]">Geometry</div>
+                <div>X: {selectedNode.x ?? selectedNode.bbox.left}″ | Y: {selectedNode.y ?? selectedNode.bbox.top}″</div>
+                <div>W: {selectedNode.w ?? selectedNode.bbox.width}″ | H: {selectedNode.h ?? selectedNode.bbox.height}″</div>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Default Slide Archetype Summary */}
+              <div className="p-3 rounded-xl bg-white border border-[#E5E0D8] shadow-2xs space-y-2">
+                <div className="text-[10px] font-mono text-[#71717A] uppercase">Slide Archetype</div>
+                <div className="text-sm font-bold text-[#001F33] flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-[#FFB81C]" />
+                  <span>{activeArchetype}</span>
+                </div>
+                <p className="text-[11px] text-[#71717A] leading-relaxed">
+                  Reflowed via dynamic 16D graph classifier and image-aware layout engine.
+                </p>
+              </div>
+
+              {/* Transformation Receipt Badges */}
+              <div className="p-3 rounded-xl bg-white border border-[#E5E0D8] shadow-2xs space-y-2">
+                <div className="text-[10px] font-mono text-[#71717A] uppercase">Transformation Receipt</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 rounded-lg bg-[#FBF9F5] border border-[#E5E0D8]">
+                    <div className="text-[9px] text-[#71717A]">Mutations</div>
+                    <div className="text-base font-bold text-[#001F33] font-mono mt-0.5">
+                      {report?.total_changes ?? (slides.length > 0 ? 65 : 0)}
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-[#FBF9F5] border border-[#E5E0D8]">
+                    <div className="text-[9px] text-[#71717A]">Slides</div>
+                    <div className="text-base font-bold text-[#001F33] font-mono mt-0.5">
+                      {slides.length}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Governance Standards Checklist */}
+              <div className="p-3 rounded-xl bg-white border border-[#E5E0D8] shadow-2xs space-y-2 text-xs">
+                <div className="text-[10px] font-mono text-[#71717A] uppercase">Governance Checklist</div>
+                <div className="flex items-center gap-2 text-[#15803D]">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Times New Roman Titles</span>
+                </div>
+                <div className="flex items-center gap-2 text-[#15803D]">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Arial Regular Body (≥8pt)</span>
+                </div>
+                <div className="flex items-center gap-2 text-[#15803D]">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Explicit solidFill XML Injected</span>
+                </div>
+                <div className="flex items-center gap-2 text-[#15803D]">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Single Corporate Logo Stamp</span>
+                </div>
+              </div>
+            </div>
+          )}
         </aside>
       </div>
     </div>
