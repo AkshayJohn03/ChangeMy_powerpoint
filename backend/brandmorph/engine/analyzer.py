@@ -20,6 +20,9 @@ _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 def _iter_shapes(shapes):
     for shp in shapes:
+        name = getattr(shp, "name", "") or ""
+        if name.startswith("BrandMorph"):
+            continue
         if shp.shape_type == MSO_SHAPE_TYPE.GROUP:
             yield shp
             yield from _iter_shapes(shp.shapes)

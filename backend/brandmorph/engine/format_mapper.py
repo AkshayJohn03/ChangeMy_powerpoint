@@ -105,19 +105,33 @@ def _decide(
     return None
 
 
+_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
+
+
 def _estimate_bg(root, fallback: str) -> str:
-    """Most common explicitly-filled shape color on the part; fallback hex."""
-    counts: dict[str, int] = {}
-    for solid in root.iter(f"{{{_A}}}solidFill"):
-        parent = solid.getparent()
-        if parent is None or _local(parent) in ("rPr", "defRPr", "endParaRPr", "tcPr", "buClr"):
-            continue
-        for child in solid:
-            if _local(child) == "srgbClr" and child.get("val"):
-                counts[child.get("val").upper()] = counts.get(child.get("val").upper(), 0) + 1
-    if not counts:
-        return fallback
-    return max(counts.items(), key=lambda kv: kv[1])[0]
+    """Detect slide background color: first from <p:bg>, then full-bleed shape, else fallback."""
+    # 1. Check <p:bg> element
+    for bg_el in root.iter(f"{{{_P}}}bg"):
+        for srgb in bg_el.iter(f"{{{_A}}}srgbClr"):
+            if srgb.get("val"):
+                return srgb.get("val").upper()
+
+    # 2. Check full-bleed background shape (>= 10,000,000 EMUs / ~11 inches)
+    for sp in root.iter(f"{{{_P}}}sp"):
+        xfrm = sp.find(f".//{{{_A}}}xfrm")
+        if xfrm is not None:
+            ext = xfrm.find(f"{{{_A}}}ext")
+            if ext is not None:
+                try:
+                    cx = int(ext.get("cx") or 0)
+                    cy = int(ext.get("cy") or 0)
+                    if cx >= 10000000 and cy >= 5500000:
+                        for srgb in sp.iter(f"{{{_A}}}srgbClr"):
+                            if srgb.get("val"):
+                                return srgb.get("val").upper()
+                except (ValueError, TypeError):
+                    pass
+    return fallback
 
 
 def _theme_lt1(prs: Presentation) -> str:

@@ -109,18 +109,20 @@ class NativePPTXBuilder:
                     p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
                     p.text = txt
 
-                    is_title = bbox["top"] < 1.5 and bbox["height"] < 1.2
+                    is_title = bbox["top"] < 1.8 and bbox["height"] < 2.0
+                    raw_pt = para_data.get("font_size", 12.0)
 
                     if is_title:
                         p.font.name = BrandTokens.FONT_TITLE
-                        p.font.size = Pt(24)
-                        p.font.bold = True
+                        p.font.size = Pt(28)
+                        p.font.bold = False
+                        p.font.italic = False
                         p.font.color.rgb = BrandTokens.GOLD
                     else:
                         p.font.name = BrandTokens.FONT_BODY
-                        p.font.size = Pt(para_data.get("font_size", 11))
+                        p.font.size = Pt(max(8.0, raw_pt))
                         p.font.bold = para_data.get("bold", False)
-                        p.font.italic = para_data.get("italic", False)
+                        p.font.italic = False
                         p.font.underline = para_data.get("underline", False)
                         p.font.color.rgb = BrandTokens.TEXT_WHITE
 

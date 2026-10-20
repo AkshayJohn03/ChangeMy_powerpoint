@@ -60,6 +60,19 @@ class SlideDecompiler:
                             if p.get("text"):
                                 slide_text_accumulator.append(p["text"])
 
+            # Layer order: PICTURES at bottom, containers in middle, text on top
+            def _layer_priority(n: Dict[str, Any]) -> int:
+                t = n.get("type")
+                if t in ("PICTURE", "IMAGE"):
+                    return 0
+                if t in ("RECTANGLE_SHAPE", "CONTAINER_SHAPE", "OVAL_SHAPE", "LINE_SHAPE", "ARROW_SHAPE"):
+                    return 1
+                if t in ("TABLE", "CHART"):
+                    return 2
+                return 3
+
+            nodes.sort(key=_layer_priority)
+
             full_text = " ".join(slide_text_accumulator)
 
             slide_ast = {
@@ -75,24 +88,24 @@ class SlideDecompiler:
 
     def _extract_shape_data(
         self, shape, offset_left: float = 0.0, offset_top: float = 0.0
-    ) -> Dict[str, Any]:
+    ) -> Dict[str, Any] | None:
         # Apply parent group offsets and clamp to safe minimums
-        left = (shape.left.inches if shape.left else 0.5) + offset_left
-        top = (shape.top.inches if shape.top else 0.5) + offset_top
-        width = max(_MIN_EXTENT, shape.width.inches if shape.width else 2.0)
-        height = max(_MIN_EXTENT, shape.height.inches if shape.height else 1.0)
+        left = max(0.0, round((shape.left.inches if shape.left else 0.5) + offset_left, 3))
+        top = max(0.0, round((shape.top.inches if shape.top else 0.5) + offset_top, 3))
+        width = max(_MIN_EXTENT, round(shape.width.inches if shape.width else 2.0, 3))
+        height = max(_MIN_EXTENT, round(shape.height.inches if shape.height else 1.0, 3))
 
-        # Normalize negative coordinates from flipped connectors
-        left = max(0.0, left)
-        top = max(0.0, top)
-
-        base_data = {
+        base_data: Dict[str, Any] = {
             "id": shape.shape_id,
+            "x": left,
+            "y": top,
+            "w": width,
+            "h": height,
             "bbox": {
-                "left": round(left, 3),
-                "top": round(top, 3),
-                "width": round(width, 3),
-                "height": round(height, 3)
+                "left": left,
+                "top": top,
+                "width": width,
+                "height": height
             }
         }
 
@@ -115,9 +128,37 @@ class SlideDecompiler:
         if line_hex:
             base_data["line_color"] = line_hex
 
-        # 1. Text Container Frame
+        # 1. Check for Picture / Image FIRST (so picture placeholders are not swallowed by has_text_frame)
+        is_picture = False
+        try:
+            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE or hasattr(shape, "image"):
+                if getattr(shape, "image", None) is not None:
+                    is_picture = True
+        except Exception:
+            pass
+
+        if is_picture:
+            try:
+                image_bytes = shape.image.blob
+                image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                content_type = getattr(shape.image, "content_type", None) or f"image/{getattr(shape.image, 'ext', 'png')}"
+                data_uri = f"data:{content_type};base64,{image_base64}"
+                base_data["type"] = "PICTURE"
+                base_data["image_src"] = data_uri
+                base_data["image_data"] = data_uri
+                return base_data
+            except Exception:
+                pass
+
+        # 2. Text Container Frame
         if shape.has_text_frame:
             paragraphs = []
+            is_title_frame = (
+                (getattr(shape, "is_placeholder", False) and getattr(shape, "placeholder_format", None) and shape.placeholder_format.type in (1, 3))
+                or "title" in (getattr(shape, "name", "") or "").lower()
+                or (top < 1.8 and height < 2.0)
+            )
+
             for p in shape.text_frame.paragraphs:
                 txt = p.text.strip()
                 if "Font Guidance" in txt or "Do not change the template" in txt:
@@ -130,25 +171,35 @@ class SlideDecompiler:
                 except Exception:
                     pass
 
+                # If no explicit font color, resolve contrast-aware color fallback
+                if not font_color:
+                    font_color = "#FFB81C" if is_title_frame else "#FFFFFF"
+
                 font_name = None
                 try:
                     if p.font and p.font.name:
                         font_name = p.font.name
                 except Exception:
                     pass
+                if not font_name:
+                    font_name = "Times New Roman" if is_title_frame else "Arial"
+
+                font_size = p.font.size.pt if p.font and p.font.size else (28.0 if is_title_frame else 12.0)
+                bold_val = False if is_title_frame else (p.font.bold if p.font else False)
 
                 paragraphs.append({
                     "text": p.text,
                     "level": p.level,
-                    "font_size": p.font.size.pt if p.font and p.font.size else 12,
+                    "font_size": font_size,
                     "font_face": font_name,
                     "font_color": font_color,
-                    "bold": p.font.bold if p.font else False,
+                    "bold": bold_val,
                     "italic": p.font.italic if p.font else False,
                     "underline": p.font.underline if p.font else False,
                     "align": str(p.alignment) if p.alignment else 'LEFT',
                     "runs": [{"text": r.text} for r in p.runs]
                 })
+
             base_data["type"] = "TEXT_CONTAINER"
             base_data["paragraphs"] = paragraphs
             if shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE:
@@ -157,17 +208,6 @@ class SlideDecompiler:
                 except Exception:
                     pass
             return base_data
-
-        # 2. Picture / Image Shape
-        elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-            try:
-                image_bytes = shape.image.blob
-                image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-                base_data["type"] = "IMAGE"
-                base_data["image_data"] = f"data:image/{shape.image.ext};base64,{image_base64}"
-                return base_data
-            except Exception:
-                pass
 
         # 3. Raw Auto-Shapes / Geometric Shapes / Arrows
         elif shape.shape_type in (MSO_SHAPE_TYPE.AUTO_SHAPE, MSO_SHAPE_TYPE.FREEFORM):
