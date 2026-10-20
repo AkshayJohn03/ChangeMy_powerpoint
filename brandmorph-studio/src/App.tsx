@@ -378,70 +378,70 @@ export default function App() {
     }
   };
 
-  // Download the formatted presentation binary
-  const handleDownload = async () => {
-    if (!deckBase64) {
-      handleClientSideExport();
-      return;
-    }
-
+  // Synchronous, gesture-preserving client download of presentation binary
+  const handleDownload = () => {
     const cleanBaseName = fileName.replace(/\.pptx$/i, '').trim() || 'Governed_Presentation';
     const safeFilename = `${cleanBaseName}_BrandMorph_${selectedBrand}.pptx`;
 
-    try {
-      const res = await fetch('/api/download_pptx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          deck_base64: deckBase64,
-          filename: safeFilename,
-        }),
-      });
-
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = safeFilename;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-        }, 10000);
-        return;
-      }
-    } catch (err) {
-      console.warn('Server download endpoint failed, falling back to client-side blob download:', err);
+    if (!deckBase64) {
+      handleClientSideExport(safeFilename);
+      return;
     }
 
     try {
-      const byteCharacters = atob(deckBase64);
-      const byteArray = Uint8Array.from(byteCharacters, (c) => c.charCodeAt(0));
-      const blob = new Blob([byteArray], {
-        type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      });
-      const url = window.URL.createObjectURL(blob);
+      // 1. Clean base64 and decode synchronously in the active click event
+      const cleanB64 = deckBase64.replace(/^data:.*?;base64,/, '').replace(/[\r\n\s]/g, '');
+      const binaryString = window.atob(cleanB64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      // 2. Wrap in a File object (carries safeFilename and PPTX MIME type to satisfy Chrome download manager)
+      const pptxMime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      let fileObj: Blob;
+      try {
+        fileObj = new File([bytes], safeFilename, { type: pptxMime });
+      } catch {
+        fileObj = new Blob([bytes], { type: pptxMime });
+      }
+
+      // 3. Create object URL
+      const url = window.URL.createObjectURL(fileObj);
+
+      // 4. Create anchor and click immediately within the synchronous user gesture
       const a = document.createElement('a');
+      a.style.display = 'none';
       a.href = url;
       a.download = safeFilename;
-      a.style.display = 'none';
+      a.setAttribute('download', safeFilename);
       document.body.appendChild(a);
       a.click();
+
+      // 5. Cleanup safely after 60s
       setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      }, 10000);
-    } catch (err) {
+        try {
+          if (document.body.contains(a)) {
+            document.body.removeChild(a);
+          }
+          window.URL.revokeObjectURL(url);
+        } catch {
+          // ignore cleanup errors
+        }
+      }, 60000);
+
+      setStatusMessage(`Downloaded ${safeFilename}`);
+    } catch (err: any) {
       console.error('Download error:', err);
+      // Fallback to client-side pptxgenjs generation if base64 decoding fails
+      handleClientSideExport(safeFilename);
     }
   };
 
-
-  const handleClientSideExport = async () => {
+  const handleClientSideExport = async (targetFilename?: string) => {
     if (!slides.length) return;
+    const outName = targetFilename || `BrandMorph_Export_${new Date().toISOString().slice(0, 10)}.pptx`;
     try {
       const pres = new pptxgen();
       pres.layout = 'LAYOUT_WIDE';
@@ -504,9 +504,11 @@ export default function App() {
         }
       }
 
-      await pres.writeFile({ fileName: `BrandMorph_Export_${new Date().toISOString().slice(0, 10)}.pptx` });
+      await pres.writeFile({ fileName: outName });
+      setStatusMessage(`Exported ${outName}`);
     } catch (e: any) {
       console.error('Export error:', e);
+      setStatusMessage(`Export error: ${e?.message || 'Failed to export presentation'}`);
     }
   };
 
