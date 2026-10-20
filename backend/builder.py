@@ -185,6 +185,68 @@ class NativePPTXBuilder:
                 arrow.fill.fore_color.rgb = BrandTokens.GOLD
                 arrow.line.color.rgb = BrandTokens.GOLD
 
+        # Render Table Containers (OpenXML Tables)
+        for node in nodes:
+            node_type = node.get("type")
+            if node_type != "TABLE":
+                continue
+
+            bbox = node.get("bbox", {"left": 0.8, "top": 1.65, "width": 11.73, "height": 4.5})
+            table_data = node.get("table_data", {})
+            rows_data = table_data.get("rows", [])
+
+            if rows_data and len(rows_data) > 0:
+                num_rows = len(rows_data)
+                num_cols = len(rows_data[0])
+                table_shape = slide.shapes.add_table(
+                    num_rows, num_cols,
+                    Inches(bbox.get("left", 0.8)),
+                    Inches(bbox.get("top", 1.65)),
+                    Inches(bbox.get("width", 11.73)),
+                    Inches(bbox.get("height", 4.5))
+                )
+                table = table_shape.table
+
+                # Col widths if provided
+                col_widths = table_data.get("col_widths", [])
+                if col_widths and len(col_widths) == num_cols:
+                    total_pct = sum(col_widths)
+                    total_w_in = bbox.get("width", 11.73)
+                    for c_idx, pct in enumerate(col_widths):
+                        table.columns[c_idx].width = Inches((pct / total_pct) * total_w_in)
+
+                for r_idx, row_cells in enumerate(rows_data):
+                    is_header = (r_idx == 0)
+                    for c_idx, cell_info in enumerate(row_cells):
+                        cell = table.cell(r_idx, c_idx)
+                        text = cell_info.get("text", "")
+                        fill_color_hex = cell_info.get("fill_color") or ("#FFB81C" if is_header else ("#081E36" if r_idx % 2 == 1 else "#030C1E"))
+                        text_color_hex = cell_info.get("text_color") or ("#001F33" if is_header else ("#FFB81C" if c_idx == 0 else "#FFFFFF"))
+                        bold = cell_info.get("bold", is_header or c_idx == 0)
+                        font_size = cell_info.get("font_size", 12 if is_header else 11)
+
+                        cell.fill.solid()
+                        cell.fill.fore_color.rgb = hex_to_rgb(fill_color_hex)
+                        cell.text = text
+
+                        if cell.text_frame and cell.text_frame.paragraphs:
+                            p = cell.text_frame.paragraphs[0]
+                            align_str = cell_info.get("align", "left")
+                            if align_str == "center":
+                                p.alignment = PP_ALIGN.CENTER
+                            elif align_str == "right":
+                                p.alignment = PP_ALIGN.RIGHT
+                            else:
+                                p.alignment = PP_ALIGN.LEFT
+
+                            for r in p.runs:
+                                r.font.name = BrandTokens.FONT_BODY
+                                r.font.size = Pt(font_size)
+                                r.font.bold = bold
+                                r.font.italic = False
+                                r.font.color.rgb = hex_to_rgb(text_color_hex)
+                                force_run_xml_color(r, hex_to_rgb(text_color_hex))
+
         # Render Text Containers (Typography & Contrast Resolution)
         for node in nodes:
             node_type = node.get("type")

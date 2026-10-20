@@ -32,6 +32,7 @@ import pptx
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE, PP_PLACEHOLDER
+from pptx.enum.text import MSO_ANCHOR
 
 from ..brand.profile import BrandDNA
 from ..report import ChangeEntry, MorphReport
@@ -41,6 +42,8 @@ _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 # Primary corporate palette constants
 RGB_DARK_NAVY = RGBColor(3, 12, 30)       # #030C1E
 RGB_SURFACE_CARD = RGBColor(8, 22, 50)    # #081632
+RGB_SURFACE_ALT = RGBColor(8, 30, 54)     # #081E36
+RGB_NAVY_TEXT = RGBColor(0, 31, 51)       # #001F33
 RGB_CORP_YELLOW = RGBColor(255, 184, 28)  # #FFB81C
 RGB_CYAN = RGBColor(0, 229, 255)          # #00E5FF
 RGB_WHITE = RGBColor(255, 255, 255)       # #FFFFFF
@@ -48,6 +51,8 @@ RGB_MUTED = RGBColor(147, 165, 196)       # #93A5C4
 RGB_BLACK = RGBColor(0, 0, 0)             # #000000
 
 HEX_DARK_NAVY = "030C1E"
+HEX_SURFACE_ALT = "081E36"
+HEX_NAVY_TEXT = "001F33"
 HEX_CORP_YELLOW = "FFB81C"
 HEX_CYAN = "00E5FF"
 HEX_WHITE = "FFFFFF"
@@ -155,16 +160,68 @@ class CorporateGovernancePass:
                 self._process_shape(child, slide_idx, default_bg)
             return
 
-        # 2. Table shapes: process each cell
+        # 2. Table shapes: enforce corporate table styling and bounds
         if getattr(shape, "has_table", False) and shape.has_table:
-            for row in shape.table.rows:
-                for cell in row.cells:
-                    cell_bg = self._get_shape_fill_hex(cell) or default_bg
-                    if cell.text_frame:
-                        self._process_text_frame(
-                            cell.text_frame, shape, slide_idx, effective_bg=cell_bg, is_table=True
-                        )
+            self._govern_table(shape)
             return
+
+    def _govern_table(self, shape) -> None:
+        """Enforce clean corporate Table styling per task specifications."""
+        try:
+            shape.left = Inches(0.80)
+            shape.top = Inches(1.65)
+            shape.width = Inches(11.73)
+            current_h = shape.height.inches if shape.height else 4.0
+            shape.height = Inches(min(4.8, max(2.5, current_h)))
+        except Exception:
+            pass
+
+        table = shape.table
+        for r_idx, row in enumerate(table.rows):
+            is_header = (r_idx == 0)
+            row_fill_rgb = RGB_CORP_YELLOW if is_header else (RGB_SURFACE_ALT if (r_idx % 2 == 1) else RGB_DARK_NAVY)
+            row_fill_hex = HEX_CORP_YELLOW if is_header else (HEX_SURFACE_ALT if (r_idx % 2 == 1) else HEX_DARK_NAVY)
+
+            for c_idx, cell in enumerate(row.cells):
+                try:
+                    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                except Exception:
+                    pass
+
+                try:
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = row_fill_rgb
+                except Exception:
+                    pass
+
+                if not cell.text_frame:
+                    continue
+
+                if is_header:
+                    for p in cell.text_frame.paragraphs:
+                        for r in p.runs:
+                            r.font.name = "Arial"
+                            r.font.size = Pt(12)
+                            r.font.bold = True
+                            r.font.italic = False
+                            r.font.color.rgb = RGB_NAVY_TEXT
+                            self._inject_run_xml(r, "Arial", HEX_NAVY_TEXT)
+                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=True)
+                else:
+                    is_first_col = (c_idx == 0)
+                    target_color_rgb = RGB_CORP_YELLOW if is_first_col else RGB_WHITE
+                    target_color_hex = HEX_CORP_YELLOW if is_first_col else HEX_WHITE
+                    target_bold = True if is_first_col else False
+
+                    for p in cell.text_frame.paragraphs:
+                        for r in p.runs:
+                            r.font.name = "Arial"
+                            r.font.size = Pt(11)
+                            r.font.bold = target_bold
+                            r.font.italic = False
+                            r.font.color.rgb = target_color_rgb
+                            self._inject_run_xml(r, "Arial", target_color_hex)
+                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False)
 
         # 3. Text frames in AutoShapes, TextBoxes, Placeholders
         if shape.has_text_frame:

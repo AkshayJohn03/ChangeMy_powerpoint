@@ -17,7 +17,7 @@ import pptx
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE, PP_PLACEHOLDER
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 
 from ..brand.profile import BrandDNA
 from ..report import MorphReport
@@ -28,6 +28,8 @@ _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 RGB_DARK_NAVY = RGBColor(3, 12, 30)       # #030C1E
 RGB_CANVAS_NAVY = RGBColor(3, 12, 30)     # #030C1E
 RGB_SURFACE_CARD = RGBColor(8, 22, 50)    # #081632
+RGB_SURFACE_ALT = RGBColor(8, 30, 54)     # #081E36
+RGB_NAVY_TEXT = RGBColor(0, 31, 51)       # #001F33 Dark Navy
 RGB_CORP_GOLD = RGBColor(255, 184, 28)    # #FFB81C
 RGB_CYAN = RGBColor(0, 229, 255)          # #00E5FF
 RGB_WHITE = RGBColor(255, 255, 255)       # #FFFFFF
@@ -36,6 +38,8 @@ RGB_BLACK = RGBColor(0, 0, 0)             # #000000
 
 HEX_DARK_NAVY = "030C1E"
 HEX_CANVAS_NAVY = "030C1E"
+HEX_SURFACE_ALT = "081E36"
+HEX_NAVY_TEXT = "001F33"
 HEX_CORP_GOLD = "FFB81C"
 HEX_CYAN = "00E5FF"
 HEX_WHITE = "FFFFFF"
@@ -222,6 +226,24 @@ class SlideGraphClassifier:
     def classify(cls, slide, slide_idx: int, total_slides: int) -> SlideArchetype:
         """Classify slide using 16D graph features and golden_brain.json weights if present."""
         feats = cls.extract_16d_features(slide, slide_idx, total_slides)
+
+        # -----------------------------------------------------------------
+        # NEURO-SYMBOLIC CONSENSUS CHECK (Corporate DNA Golden Pair Guard)
+        # 1. Slide index 0 is strictly COVER_SLIDE
+        # 2. Any slide containing a Table is strictly DATA_TABLE_SLIDE
+        # 3. >=3 timeline nodes or horizontal sequence is strictly PROCESS_TIMELINE
+        # -----------------------------------------------------------------
+        if slide_idx == 0:
+            return SlideArchetype.COVER_SLIDE
+
+        has_table_shape = feats[3] > 0.5 or any(getattr(s, "has_table", False) and s.has_table for s in slide.shapes)
+        if has_table_shape:
+            return SlideArchetype.DATA_TABLE_SLIDE
+
+        h_seq = feats[8] >= 3.0
+        timeline_kw = feats[7] > 0.5
+        if h_seq or (timeline_kw and feats[12] >= 3):
+            return SlideArchetype.PROCESS_TIMELINE
 
         # Check for external golden_brain.json weights
         weights_paths = [
@@ -700,6 +722,49 @@ class ArchetypeEngine:
                 except Exception:
                     pass
 
+        # Case B3: Data Table Slide (or any slide containing a Table)
+        table_shapes = [s for s in slide.shapes if getattr(s, "has_table", False) and s.has_table]
+        for ts in table_shapes:
+            try:
+                # Table Bounding Box: Position cleanly below top-left title (left=0.80", top=1.65", width=11.73", height<=4.8" max)
+                ts.left = Inches(0.80)
+                ts.top = Inches(1.65)
+                ts.width = Inches(11.73)
+                current_h = ts.height.inches if ts.height else 4.0
+                ts.height = Inches(min(4.8, max(2.5, current_h)))
+            except Exception:
+                pass
+            self._style_table_corporate(ts.table)
+
+        # Case B4: Multi-card content (zero pictures, 1-4 content cards)
+        if archetype == SlideArchetype.MULTI_CARD_CONTENT and len(pictures) == 0 and 1 <= len(content_text_shapes) <= 4:
+            k = len(content_text_shapes)
+            # Golden Pair constants: 1 card = 11.73", 2 cards = 5.70" (gap 0.33"), 3 cards = 3.68" (gap 0.34"), 4 cards = 2.68" (gap 0.33")
+            card_configs = {
+                1: (11.73, 0.0),
+                2: (5.70, 0.33),
+                3: (3.68, 0.34),
+                4: (2.68, 0.33),
+            }
+            card_w, gap = card_configs[k]
+            start_left = 0.80
+            top_pos = 1.65
+            card_h = 4.80
+
+            content_text_shapes.sort(key=lambda s: s.left.inches if hasattr(s, "left") and s.left else 0.0)
+            for i, ts in enumerate(content_text_shapes):
+                cur_left = start_left + i * (card_w + gap)
+                try:
+                    ts.left = Inches(cur_left)
+                    ts.top = Inches(top_pos)
+                    ts.width = Inches(card_w)
+                    ts.height = Inches(card_h)
+                    if hasattr(ts, "fill"):
+                        ts.fill.solid()
+                        ts.fill.fore_color.rgb = RGB_SURFACE_ALT
+                except Exception:
+                    pass
+
         # ---------------------------------------------------------------------
         # RULES C & D: Typography & Contrast Enforcement on All Shapes
         # ---------------------------------------------------------------------
@@ -709,6 +774,56 @@ class ArchetypeEngine:
             self._govern_shape_typography_and_contrast(
                 shape, slide_idx, title_shape, subtitle_shape, archetype, default_bg=HEX_CANVAS_NAVY
             )
+
+    def _style_table_corporate(self, table) -> None:
+        """Enforce clean corporate Table styling per task specifications."""
+        for r_idx, row in enumerate(table.rows):
+            is_header = (r_idx == 0)
+            row_fill_rgb = RGB_CORP_GOLD if is_header else (RGB_SURFACE_ALT if (r_idx % 2 == 1) else RGB_CANVAS_NAVY)
+            row_fill_hex = HEX_CORP_GOLD if is_header else (HEX_SURFACE_ALT if (r_idx % 2 == 1) else HEX_CANVAS_NAVY)
+
+            for c_idx, cell in enumerate(row.cells):
+                try:
+                    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                except Exception:
+                    pass
+
+                try:
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = row_fill_rgb
+                except Exception:
+                    pass
+
+                if not cell.text_frame:
+                    continue
+
+                if is_header:
+                    # Header row: Arial 12pt Bold, Dark Navy #001F33
+                    for p in cell.text_frame.paragraphs:
+                        for r in p.runs:
+                            r.font.name = "Arial"
+                            r.font.size = Pt(12)
+                            r.font.bold = True
+                            r.font.italic = False
+                            r.font.color.rgb = RGB_NAVY_TEXT
+                            self._inject_run_xml(r, "Arial", HEX_NAVY_TEXT)
+                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=True)
+                else:
+                    # Data row: First column is Bold Gold #FFB81C or White; other cells regular White 11pt
+                    is_first_col = (c_idx == 0)
+                    target_color_rgb = RGB_CORP_GOLD if is_first_col else RGB_WHITE
+                    target_color_hex = HEX_CORP_GOLD if is_first_col else HEX_WHITE
+                    target_bold = True if is_first_col else False
+
+                    for p in cell.text_frame.paragraphs:
+                        for r in p.runs:
+                            r.font.name = "Arial"
+                            r.font.size = Pt(11)
+                            r.font.bold = target_bold
+                            r.font.italic = False
+                            r.font.color.rgb = target_color_rgb
+                            self._inject_run_xml(r, "Arial", target_color_hex)
+                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False)
 
     def _govern_shape_typography_and_contrast(
         self, shape, slide_idx: int, title_shape, subtitle_shape, archetype: SlideArchetype, default_bg: str
@@ -722,13 +837,7 @@ class ArchetypeEngine:
             return
 
         if getattr(shape, "has_table", False) and shape.has_table:
-            for row in shape.table.rows:
-                for cell in row.cells:
-                    cell_bg = self._get_shape_fill_hex(cell) or default_bg
-                    if cell.text_frame:
-                        self._process_text_runs(
-                            cell.text_frame, shape, is_title=False, is_sub=False, effective_bg=cell_bg
-                        )
+            # Table cells are governed by _style_table_corporate; skip generic contrast loop to avoid overwriting header text
             return
 
         if shape.has_text_frame:

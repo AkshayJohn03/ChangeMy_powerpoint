@@ -2,6 +2,7 @@ import base64
 import pptx
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.dml import MSO_FILL
+from pptx.enum.text import PP_ALIGN
 from typing import Dict, List, Any, Optional, Generator, Tuple
 
 try:
@@ -302,6 +303,84 @@ class SlideDecompiler:
         if is_table:
             base_data["type"] = "TABLE"
             base_data["shape_name"] = "TABLE_SHAPE"
+            try:
+                table = shape.table
+                rows_data = []
+                total_w = sum(col.width.inches for col in table.columns if col.width) if table.columns else 0.0
+                if total_w > 0:
+                    col_widths = [round((col.width.inches / total_w) * 100, 1) for col in table.columns]
+                else:
+                    n_cols = len(table.columns) if table.columns else 1
+                    col_widths = [round(100.0 / n_cols, 1)] * n_cols
+
+                for r_idx, row in enumerate(table.rows):
+                    row_cells = []
+                    for c_idx, cell in enumerate(row.cells):
+                        text = cell.text.strip() if cell.text else ""
+
+                        # Extract cell fill
+                        fill_color = None
+                        try:
+                            if cell.fill and cell.fill.type == 1 and hasattr(cell.fill, "fore_color"):
+                                fill_color = f"#{str(cell.fill.fore_color.rgb)}".upper()
+                        except Exception:
+                            pass
+                        if not fill_color:
+                            fill_color = "#FFB81C" if r_idx == 0 else ("#081E36" if r_idx % 2 == 1 else "#030C1E")
+
+                        # Extract cell text styling
+                        text_color = None
+                        bold = (r_idx == 0 or c_idx == 0)
+                        font_size = 12.0 if r_idx == 0 else 11.0
+                        align = "left"
+
+                        if cell.text_frame and cell.text_frame.paragraphs:
+                            p0 = cell.text_frame.paragraphs[0]
+                            if p0.alignment == PP_ALIGN.CENTER:
+                                align = "center"
+                            elif p0.alignment == PP_ALIGN.RIGHT:
+                                align = "right"
+                            else:
+                                align = "left"
+
+                            for p in cell.text_frame.paragraphs:
+                                for r in p.runs:
+                                    if r.font:
+                                        if r.font.bold is not None:
+                                            bold = r.font.bold
+                                        if r.font.size and r.font.size.pt:
+                                            font_size = r.font.size.pt
+                                        if r.font.color and r.font.color.type == 1:
+                                            try:
+                                                text_color = f"#{str(r.font.color.rgb)}".upper()
+                                            except Exception:
+                                                pass
+                                    if text_color:
+                                        break
+                                if text_color:
+                                    break
+
+                        if not text_color:
+                            text_color = "#001F33" if r_idx == 0 else ("#FFB81C" if c_idx == 0 else "#FFFFFF")
+
+                        row_cells.append({
+                            "text": text,
+                            "fill_color": fill_color,
+                            "text_color": text_color,
+                            "bold": bold,
+                            "font_size": font_size,
+                            "align": align,
+                        })
+                    rows_data.append(row_cells)
+
+                base_data["table_data"] = {
+                    "rows": rows_data,
+                    "col_widths": col_widths,
+                    "num_rows": len(table.rows),
+                    "num_cols": len(table.columns),
+                }
+            except Exception:
+                pass
             return base_data
 
         # 6. Charts

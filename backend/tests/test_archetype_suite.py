@@ -343,3 +343,39 @@ def test_12_slide_presentation_archetypes_and_rules(tmp_path):
                         f"Slide {s_idx+1} text '{r.text}' color #{r_hex} has insufficient contrast {contrast:.2f}:1 "
                         f"against background #{shape_bg}"
                     )
+
+    # -------------------------------------------------------------------------
+    # CHECK 6: Clean Corporate Table Styling & table_data extraction (Slide 5)
+    # -------------------------------------------------------------------------
+    s5 = prs.slides[4]
+    table_shapes = [s for s in s5.shapes if getattr(s, "has_table", False) and s.has_table]
+    assert len(table_shapes) == 1, "Slide 5 must contain exactly 1 table"
+    t_shape = table_shapes[0]
+    assert abs(t_shape.left.inches - 0.80) < 0.05, f"Table left is {t_shape.left.inches:.2f}\", expected 0.80\""
+    assert abs(t_shape.top.inches - 1.65) < 0.05, f"Table top is {t_shape.top.inches:.2f}\", expected 1.65\""
+    assert abs(t_shape.width.inches - 11.73) < 0.05, f"Table width is {t_shape.width.inches:.2f}\", expected 11.73\""
+    assert t_shape.height.inches <= 4.85, f"Table height is {t_shape.height.inches:.2f}\", expected <= 4.8\""
+
+    t = t_shape.table
+    # Header row
+    h_cell = t.cell(0, 0)
+    assert f"{h_cell.fill.fore_color.rgb}".upper() == "FFB81C", "Header fill must be Gold #FFB81C"
+    h_run = h_cell.text_frame.paragraphs[0].runs[0]
+    assert f"{h_run.font.color.rgb}".upper() == "001F33", "Header text must be Dark Navy #001F33"
+    assert h_run.font.bold is True, "Header text must be bold"
+
+    # Data row 1 alternating fill
+    d1_cell = t.cell(1, 0)
+    assert f"{d1_cell.fill.fore_color.rgb}".upper() == "081E36", "Row 1 fill must be #081E36"
+    d1_run = d1_cell.text_frame.paragraphs[0].runs[0]
+    assert f"{d1_run.font.color.rgb}".upper() in ("FFB81C", "FFFFFF"), "First col text must be Gold or White"
+    assert d1_run.font.bold is True, "First col text must be bold"
+
+    # AST check
+    s5_ast = ast_slides[4]
+    t_nodes = [n for n in s5_ast["nodes"] if n["type"] == "TABLE"]
+    assert len(t_nodes) == 1, "Slide 5 AST must have TABLE node"
+    assert "table_data" in t_nodes[0], "Slide 5 TABLE node must have table_data"
+    assert len(t_nodes[0]["table_data"]["rows"]) == 4, "table_data must have 4 rows"
+    assert len(t_nodes[0]["table_data"]["col_widths"]) == 3, "table_data must have 3 col_widths"
+

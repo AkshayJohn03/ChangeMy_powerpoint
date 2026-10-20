@@ -44,6 +44,19 @@ interface ASTNode {
     align?: string;
     runs?: { text: string }[];
   }[];
+  table_data?: {
+    rows: {
+      text: string;
+      fill_color: string;
+      text_color: string;
+      bold: boolean;
+      font_size: number;
+      align: string;
+    }[][];
+    col_widths?: number[];
+    num_rows?: number;
+    num_cols?: number;
+  };
 }
 
 interface SlideAST {
@@ -330,6 +343,28 @@ export default function App() {
               h,
               fill: { color: (node.fill_color || '#081632').replace('#', '') },
               line: { color: (node.line_color || '#14305F').replace('#', ''), width: 1 },
+            });
+          } else if (node.type === 'TABLE' && node.table_data?.rows) {
+            const tableRows = node.table_data.rows.map((row: any[], rIdx: number) =>
+              row.map((cell: any, cIdx: number) => ({
+                text: cell.text || '',
+                options: {
+                  fill: { color: (cell.fill_color || (rIdx === 0 ? 'FFB81C' : rIdx % 2 === 1 ? '081E36' : '030C1E')).replace('#', '') },
+                  color: (cell.text_color || (rIdx === 0 ? '001F33' : cIdx === 0 ? 'FFB81C' : 'FFFFFF')).replace('#', ''),
+                  bold: cell.bold ?? (rIdx === 0 || cIdx === 0),
+                  fontSize: cell.font_size || (rIdx === 0 ? 12 : 11),
+                  fontFace: 'Arial',
+                  align: cell.align || 'left',
+                  valign: 'middle',
+                },
+              }))
+            );
+            slide.addTable(tableRows as any, {
+              x,
+              y,
+              w,
+              h,
+              border: { type: 'solid', color: '14305F', pt: 1 },
             });
           }
         }
@@ -691,7 +726,7 @@ export default function App() {
                       );
                     })}
 
-                  {/* Layer 3: Tables */}
+                  {/* Layer 3: Tables (Real Grid HTML Table) */}
                   {activeSlide?.nodes
                     .filter((n) => n.type === 'TABLE')
                     .map((node, nIdx) => {
@@ -700,6 +735,7 @@ export default function App() {
                       const widthPx = ((node.w ?? node.bbox.width) ?? 1) * SCALE_X;
                       const heightPx = ((node.h ?? node.bbox.height) ?? 1) * SCALE_Y;
                       const isSelected = selectedNodeIndex === nIdx;
+                      const tableData = node.table_data;
 
                       return (
                         <div
@@ -714,27 +750,64 @@ export default function App() {
                             width: `${widthPx}px`,
                             height: `${heightPx}px`,
                           }}
-                          className={`absolute rounded border border-[#14305F] bg-[#081632]/80 p-2 cursor-pointer ${
+                          className={`absolute rounded overflow-hidden cursor-pointer shadow-md ${
                             isSelected ? 'ring-2 ring-[#FFB81C]' : ''
                           }`}
                         >
-                          <div className="w-full h-full flex flex-col justify-around text-[10px] text-white">
-                            <div className="flex justify-between border-b border-[#14305F] pb-1 font-bold text-[#FFB81C]">
-                              <span>Metric</span>
-                              <span>FY24</span>
-                              <span>FY25 Target</span>
+                          {tableData && tableData.rows && tableData.rows.length > 0 ? (
+                            <table className="w-full h-full border-collapse" style={{ tableLayout: 'fixed' }}>
+                              <tbody>
+                                {tableData.rows.map((row: any[], rIdx: number) => (
+                                  <tr key={`tr-${rIdx}`}>
+                                    {row.map((cell: any, cIdx: number) => {
+                                      const isHeader = rIdx === 0;
+                                      const cellBg = cell.fill_color || (isHeader ? '#FFB81C' : rIdx % 2 === 1 ? '#081E36' : '#030C1E');
+                                      const cellColor = cell.text_color || (isHeader ? '#001F33' : cIdx === 0 ? '#FFB81C' : '#FFFFFF');
+                                      const colPct = tableData.col_widths?.[cIdx] ?? 100 / row.length;
+                                      return (
+                                        <td
+                                          key={`td-${rIdx}-${cIdx}`}
+                                          style={{
+                                            backgroundColor: cellBg,
+                                            color: cellColor,
+                                            fontFamily: 'Arial, sans-serif',
+                                            fontWeight: cell.bold ? 700 : (isHeader || cIdx === 0 ? 700 : 400),
+                                            fontSize: `${Math.max(9, Math.min(13, (cell.font_size || 11) * 0.95))}px`,
+                                            textAlign: cell.align || 'left',
+                                            verticalAlign: 'middle',
+                                            border: '1px solid #14305F',
+                                            padding: '4px 8px',
+                                            width: `${colPct}%`,
+                                            wordBreak: 'break-word',
+                                          }}
+                                        >
+                                          {cell.text}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <div className="w-full h-full flex flex-col justify-around text-[10px] text-white p-2 bg-[#081632]/80 border border-[#14305F]">
+                              <div className="flex justify-between border-b border-[#14305F] pb-1 font-bold text-[#FFB81C]">
+                                <span>Metric</span>
+                                <span>FY24 Actual</span>
+                                <span>FY25 Plan</span>
+                              </div>
+                              <div className="flex justify-between text-[#FFFFFF]">
+                                <span className="text-[#FFB81C] font-semibold">Revenue ($M)</span>
+                                <span>$124.5</span>
+                                <span>$168.0</span>
+                              </div>
+                              <div className="flex justify-between text-[#FFFFFF]">
+                                <span className="text-[#FFB81C] font-semibold">Gross Margin</span>
+                                <span>74.2%</span>
+                                <span>78.5%</span>
+                              </div>
                             </div>
-                            <div className="flex justify-between text-[#93A5C4]">
-                              <span>Service Availability</span>
-                              <span>98.2%</span>
-                              <span className="text-white">99.5%</span>
-                            </div>
-                            <div className="flex justify-between text-[#93A5C4]">
-                              <span>Incident MTTR</span>
-                              <span>42 min</span>
-                              <span className="text-white">25 min</span>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       );
                     })}
