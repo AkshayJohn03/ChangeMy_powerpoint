@@ -107,6 +107,56 @@ class SlideDecompiler:
             pass
         return default_hex
 
+    @staticmethod
+    def _resolve_shape_bounds(shape, slide=None) -> Tuple[float, float, float, float]:
+        """Resolve (left_in, top_in, width_in, height_in) in inches, resolving inherited placeholder bounds."""
+        raw_l = shape.left.inches if (hasattr(shape, "left") and shape.left is not None) else None
+        raw_t = shape.top.inches if (hasattr(shape, "top") and shape.top is not None) else None
+        raw_w = shape.width.inches if (hasattr(shape, "width") and shape.width is not None) else None
+        raw_h = shape.height.inches if (hasattr(shape, "height") and shape.height is not None) else None
+
+        is_missing = (
+            raw_l is None or raw_t is None or raw_w is None or raw_h is None
+            or (raw_l == 0.0 and raw_t == 0.0 and raw_w == 0.0 and raw_h == 0.0)
+        )
+
+        if is_missing and slide is not None and getattr(shape, "is_placeholder", False):
+            try:
+                ph_fmt = shape.placeholder_format
+                p_idx = getattr(ph_fmt, "idx", None)
+                p_type = getattr(ph_fmt, "type", None)
+                layout = getattr(slide, "slide_layout", None)
+                if layout and hasattr(layout, "placeholders"):
+                    match_ph = None
+                    for l_ph in layout.placeholders:
+                        l_fmt = getattr(l_ph, "placeholder_format", None)
+                        if l_fmt and l_fmt.idx == p_idx:
+                            match_ph = l_ph
+                            break
+                    if match_ph is None and p_type is not None:
+                        for l_ph in layout.placeholders:
+                            l_fmt = getattr(l_ph, "placeholder_format", None)
+                            if l_fmt and l_fmt.type == p_type:
+                                match_ph = l_ph
+                                break
+                    if match_ph is not None:
+                        if raw_l is None or raw_l == 0.0:
+                            raw_l = match_ph.left.inches if match_ph.left is not None else 0.5
+                        if raw_t is None or raw_t == 0.0:
+                            raw_t = match_ph.top.inches if match_ph.top is not None else 0.5
+                        if raw_w is None or raw_w == 0.0:
+                            raw_w = match_ph.width.inches if match_ph.width is not None else 2.0
+                        if raw_h is None or raw_h == 0.0:
+                            raw_h = match_ph.height.inches if match_ph.height is not None else 1.0
+            except Exception:
+                pass
+
+        left_in = raw_l if raw_l is not None else 0.5
+        top_in = raw_t if raw_t is not None else 0.5
+        width_in = raw_w if raw_w is not None else 2.0
+        height_in = raw_h if raw_h is not None else 1.0
+        return left_in, top_in, width_in, height_in
+
     def parse_deck(self) -> List[Dict[str, Any]]:
         parsed_slides = []
         for index, slide in enumerate(self.prs.slides):
@@ -124,7 +174,7 @@ class SlideDecompiler:
                 pass
 
             for shape, off_left, off_top in self._iter_shapes(slide.shapes):
-                node = self._extract_shape_data(shape, off_left, off_top)
+                node = self._extract_shape_data(shape, off_left, off_top, slide=slide)
                 if node:
                     nodes.append(node)
                     if node.get("type") == "TEXT_CONTAINER" and node.get("paragraphs"):
@@ -171,14 +221,15 @@ class SlideDecompiler:
         return parsed_slides
 
     def _extract_shape_data(
-        self, shape, offset_left: float = 0.0, offset_top: float = 0.0
+        self, shape, offset_left: float = 0.0, offset_top: float = 0.0, slide=None
     ) -> Dict[str, Any] | None:
         try:
             try:
-                raw_left = (shape.left.inches if shape.left is not None else 0.5) + offset_left
-                raw_top = (shape.top.inches if shape.top is not None else 0.5) + offset_top
-                raw_width = shape.width.inches if shape.width is not None else 2.0
-                raw_height = shape.height.inches if shape.height is not None else 1.0
+                raw_l, raw_t, raw_w, raw_h = self._resolve_shape_bounds(shape, slide)
+                raw_left = raw_l + offset_left
+                raw_top = raw_t + offset_top
+                raw_width = raw_w
+                raw_height = raw_h
 
                 left = max(0.0, round(raw_left * self.scale_x, 3))
                 top = max(0.0, round(raw_top * self.scale_y, 3))
@@ -193,6 +244,7 @@ class SlideDecompiler:
             shape_name_str = getattr(shape, "name", "") or ""
             base_data: Dict[str, Any] = {
                 "id": shape_id,
+
                 "name": shape_name_str,
                 "x": left,
                 "y": top,
@@ -333,8 +385,19 @@ class SlideDecompiler:
                         pass
 
                     if self.raw_mode:
+                        bg_color = self._extract_slide_bg_color(slide) if slide else "#FFFFFF"
+                        bg_lum = 1.0
+                        try:
+                            clean_bg = bg_color.lstrip("#")
+                            if len(clean_bg) == 6:
+                                r, g, b = int(clean_bg[0:2], 16)/255.0, int(clean_bg[2:4], 16)/255.0, int(clean_bg[4:6], 16)/255.0
+                                bg_lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                        except Exception:
+                            bg_lum = 1.0
+                        default_text_color = "#FFFFFF" if bg_lum < 0.35 else "#18181B"
+
                         p_color = _color_to_hex(p.font.color) if (p.font and hasattr(p.font, "color")) else None
-                        font_color = first_run_color or p_color or "#111827"
+                        font_color = first_run_color or p_color or default_text_color
                         font_name = first_run_font or (p.font.name if p.font else None) or "Calibri"
                         font_size = first_run_size or (p.font.size.pt if p.font and p.font.size else (28.0 if is_title_frame else 14.0))
                         bold = bool(p.font.bold) if (p.font and p.font.bold is not None) else (first_run_bold or False)
@@ -345,6 +408,7 @@ class SlideDecompiler:
                         font_size = p.font.size.pt if p.font and p.font.size else (28.0 if is_title_frame else 12.0)
                         bold = False if is_title_frame else (bool(p.font.bold) if p.font else False)
                         italic = bool(p.font.italic) if p.font else False
+
 
                     paragraphs.append({
                         "text": p.text,
@@ -452,9 +516,19 @@ class SlideDecompiler:
 
                             if not text_color:
                                 if self.raw_mode:
-                                    text_color = "#111827"
+                                    bg_color = self._extract_slide_bg_color(slide) if slide else "#FFFFFF"
+                                    bg_lum = 1.0
+                                    try:
+                                        clean_bg = bg_color.lstrip("#")
+                                        if len(clean_bg) == 6:
+                                            r, g, b = int(clean_bg[0:2], 16)/255.0, int(clean_bg[2:4], 16)/255.0, int(clean_bg[4:6], 16)/255.0
+                                            bg_lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                                    except Exception:
+                                        bg_lum = 1.0
+                                    text_color = "#FFFFFF" if bg_lum < 0.35 else "#18181B"
                                 else:
                                     text_color = "#001F33" if r_idx == 0 else ("#FFB81C" if c_idx == 0 else "#FFFFFF")
+
 
                             row_cells.append({
                                 "text": text,

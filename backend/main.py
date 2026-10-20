@@ -5,9 +5,10 @@ import tempfile
 from typing import Any
 
 import uvicorn
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+
 from pptx.dml.color import RGBColor
 
 try:
@@ -191,6 +192,32 @@ async def export_deck(payload: dict[str, Any] = Body(...)):
         )
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.post("/api/download_pptx")
+async def download_pptx(payload: dict[str, Any] = Body(...)):
+    """Clean endpoint for downloading presentation binary with strict Content-Disposition headers."""
+    deck_b64 = payload.get("deck_base64")
+    if not deck_b64:
+        raise HTTPException(status_code=400, detail="Missing deck_base64")
+
+    filename = payload.get("filename", "BrandMorph_Presentation.pptx")
+    clean_name = filename.replace(".pptx", "").strip() or "BrandMorph_Presentation"
+    safe_name = "".join(c for c in clean_name if c.isalnum() or c in ("-", "_", " ")).strip()
+    safe_filename = f"{safe_name}.pptx"
+
+    try:
+        pptx_bytes = base64.b64decode(deck_b64)
+        return Response(
+            content=pptx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_filename}"',
+                "Content-Length": str(len(pptx_bytes)),
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ---------------------------------------------------------------------------
 # BrandMorph v2 — in-place brand morphing engine (see docs/V2_DESIGN.md).

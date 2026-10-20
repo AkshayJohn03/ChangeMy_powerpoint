@@ -379,30 +379,66 @@ export default function App() {
   };
 
   // Download the formatted presentation binary
-  const handleDownload = () => {
-    if (deckBase64) {
-      const byteCharacters = atob(deckBase64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+  const handleDownload = async () => {
+    if (!deckBase64) {
+      handleClientSideExport();
+      return;
+    }
+
+    const cleanBaseName = fileName.replace(/\.pptx$/i, '').trim() || 'Governed_Presentation';
+    const safeFilename = `${cleanBaseName}_BrandMorph_${selectedBrand}.pptx`;
+
+    try {
+      const res = await fetch('/api/download_pptx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deck_base64: deckBase64,
+          filename: safeFilename,
+        }),
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = safeFilename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        }, 10000);
+        return;
       }
-      const byteArray = new Uint8Array(byteNumbers);
+    } catch (err) {
+      console.warn('Server download endpoint failed, falling back to client-side blob download:', err);
+    }
+
+    try {
+      const byteCharacters = atob(deckBase64);
+      const byteArray = Uint8Array.from(byteCharacters, (c) => c.charCodeAt(0));
       const blob = new Blob([byteArray], {
         type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const cleanName = fileName.replace(/\.pptx$/i, '') || 'Governed_Presentation';
-      a.download = `${cleanName}_BrandMorph_${selectedBrand}.pptx`;
+      a.download = safeFilename;
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } else {
-      handleClientSideExport();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 10000);
+    } catch (err) {
+      console.error('Download error:', err);
     }
   };
+
 
   const handleClientSideExport = async () => {
     if (!slides.length) return;
@@ -740,6 +776,21 @@ export default function App() {
                   />
                 )}
 
+                {/* Visual Indicator Badge on Canvas */}
+                <div className="absolute top-2.5 left-3 z-30 pointer-events-none">
+                  {viewMode === 'before' ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-100/95 text-amber-900 border border-amber-300 shadow-xs text-[10px] font-mono font-bold tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+                      <span>RAW ORIGINAL SLIDE</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#001F33]/95 text-[#FFB81C] border border-[#FFB81C]/40 shadow-xs text-[10px] font-mono font-bold tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#FFB81C]" />
+                      <span>GOVERNED CORPORATE SLIDE</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* AST Nodes Rendering Layer — Canvas renders ONLY nodes from slide AST (Zero duplicate overlays!) */}
                 <div className="relative z-10 w-full h-full">
                   {/* Layer 1: PICTURE Nodes */}
@@ -774,7 +825,7 @@ export default function App() {
                             <img
                               src={imgSrc}
                               alt="Slide Visual Asset"
-                              className="w-full h-full object-cover select-none pointer-events-none"
+                              className="w-full h-full object-contain select-none pointer-events-none"
                             />
                           ) : (
                             <div className="w-full h-full bg-[#14305F]/40 flex items-center justify-center text-[10px] text-[#8EA0C2]">
@@ -794,7 +845,11 @@ export default function App() {
                         n.type === 'OVAL_SHAPE' ||
                         n.type === 'ARROW_SHAPE' ||
                         n.type === 'LINE_SHAPE') &&
-                        (viewMode === 'after' || (!n.shape_name?.startsWith('BrandMorph') && !n.name?.startsWith('BrandMorph')))
+                        (viewMode === 'after'
+                          ? true
+                          : (!n.shape_name?.startsWith('BrandMorph') &&
+                             !n.name?.startsWith('BrandMorph') &&
+                             Boolean(n.fill_color || n.line_color)))
                     )
                     .map((node, nIdx) => {
                       const leftPx = ((node.x ?? node.bbox.left) ?? 0) * SCALE_X;
@@ -866,7 +921,7 @@ export default function App() {
                                           : (cell.fill_color || (isHeader ? '#FFB81C' : rIdx % 2 === 1 ? '#081E36' : '#030C1E'));
                                       const cellColor =
                                         viewMode === 'before'
-                                          ? (cell.text_color || '#111827')
+                                          ? (cell.text_color || '#18181B')
                                           : (cell.text_color || (isHeader ? '#001F33' : cIdx === 0 ? '#FFB81C' : '#FFFFFF'));
                                       const colPct = tableData.col_widths?.[cIdx] ?? 100 / row.length;
                                       return (
@@ -875,8 +930,8 @@ export default function App() {
                                           style={{
                                             backgroundColor: cellBg,
                                             color: cellColor,
-                                            fontFamily: 'Arial, sans-serif',
-                                            fontWeight: cell.bold ? 700 : (isHeader || cIdx === 0 ? 700 : 400),
+                                            fontFamily: viewMode === 'before' ? 'Calibri, sans-serif' : 'Arial, sans-serif',
+                                            fontWeight: viewMode === 'before' ? (cell.bold ? 700 : 400) : (cell.bold ? 700 : (isHeader || cIdx === 0 ? 700 : 400)),
                                             fontSize: `${Math.max(9, Math.min(13, (cell.font_size || 11) * 0.95))}px`,
                                             textAlign: cell.align || 'left',
                                             verticalAlign: 'middle',
@@ -955,18 +1010,14 @@ export default function App() {
                           {node.paragraphs?.map((p, pIdx) => {
                             const isTitle = (node.y ?? node.bbox.top) < 1.8 && (node.w ?? node.bbox.width) > 3.5;
                             const fontFace =
-                              viewMode === 'after'
-                                ? isTitle
-                                  ? 'Times New Roman'
-                                  : p.font_face || 'Arial'
-                                : p.font_face || 'Arial';
+                              viewMode === 'before'
+                                ? (p.font_face || 'Calibri, sans-serif')
+                                : (isTitle ? 'Times New Roman' : (p.font_face || 'Arial'));
 
                             const defaultColor =
                               viewMode === 'before'
-                                ? '#111827'
-                                : isTitle
-                                ? '#FFB81C'
-                                : '#FFFFFF';
+                                ? '#18181B'
+                                : (isTitle ? '#FFB81C' : '#FFFFFF');
 
                             const color = p.font_color || defaultColor;
 
@@ -992,6 +1043,7 @@ export default function App() {
                       );
                     })}
                 </div>
+
               </div>
             </div>
           )}

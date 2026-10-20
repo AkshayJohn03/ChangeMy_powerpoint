@@ -417,8 +417,16 @@ class CorporateGovernancePass:
             self._inject_para_def_rpr(para, is_title, is_bright_bg)
 
     def _inject_run_xml(self, run, font_family: str, color_hex: str) -> None:
-        """Explicitly inject drawingML <a:solidFill> and typeface tags into run's XML."""
+        """Explicitly inject drawingML <a:solidFill> and typeface tags into run's XML in schema-compliant order."""
         try:
+            clean_hex = color_hex.lstrip("#")
+            if len(clean_hex) == 6:
+                r_val = int(clean_hex[0:2], 16)
+                g_val = int(clean_hex[2:4], 16)
+                b_val = int(clean_hex[4:6], 16)
+                run.font.color.rgb = RGBColor(r_val, g_val, b_val)
+            run.font.name = font_family
+
             rPr = run._r.get_or_add_rPr()
 
             # 1. Clear conflicting fills (schemeClr, noFill, sysClr)
@@ -427,10 +435,22 @@ class CorporateGovernancePass:
                 if tag in ("solidFill", "schemeClr", "noFill", "sysClr", "gradFill", "blipFill"):
                     rPr.remove(child)
 
-            # 2. Add explicit solidFill srgbClr
-            solidFill = etree.SubElement(rPr, f"{{{_A}}}solidFill")
+            # 2. Add explicit solidFill srgbClr BEFORE typeface tags
+            solidFill = etree.Element(f"{{{_A}}}solidFill")
             srgb = etree.SubElement(solidFill, f"{{{_A}}}srgbClr")
-            srgb.set("val", color_hex)
+            srgb.set("val", clean_hex)
+
+            first_typeface = None
+            for child in list(rPr):
+                tag = etree.QName(child).localname
+                if tag in ("latin", "ea", "cs", "sym", "hlinkClick", "hlinkMouseOver", "rtl", "extLst"):
+                    first_typeface = child
+                    break
+
+            if first_typeface is not None:
+                first_typeface.addprevious(solidFill)
+            else:
+                rPr.append(solidFill)
 
             # 3. Ensure typeface tags
             for tag in ("latin", "cs", "ea"):
@@ -453,10 +473,22 @@ class CorporateGovernancePass:
                 if tag in ("solidFill", "schemeClr", "noFill", "sysClr"):
                     defRPr.remove(child)
 
-            solidFill = etree.SubElement(defRPr, f"{{{_A}}}solidFill")
+            solidFill = etree.Element(f"{{{_A}}}solidFill")
             srgb = etree.SubElement(solidFill, f"{{{_A}}}srgbClr")
             color_hex = HEX_DARK_NAVY if is_bright_bg else (HEX_CORP_YELLOW if is_title else HEX_WHITE)
             srgb.set("val", color_hex)
+
+            first_typeface = None
+            for child in list(defRPr):
+                tag = etree.QName(child).localname
+                if tag in ("latin", "ea", "cs", "sym", "hlinkClick", "hlinkMouseOver", "rtl", "extLst"):
+                    first_typeface = child
+                    break
+
+            if first_typeface is not None:
+                first_typeface.addprevious(solidFill)
+            else:
+                defRPr.append(solidFill)
 
             family = "Times New Roman" if is_title else "Arial"
             for tag in ("latin", "cs", "ea"):
@@ -466,3 +498,4 @@ class CorporateGovernancePass:
                 el.set("typeface", family)
         except Exception:
             pass
+

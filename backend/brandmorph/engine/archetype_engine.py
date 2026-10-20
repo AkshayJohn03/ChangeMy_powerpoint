@@ -478,10 +478,106 @@ class ArchetypeEngine:
 
         return title_shape, subtitle_shape
 
+    @staticmethod
+    def _resolve_shape_bounds(shape, slide=None) -> Tuple[float, float, float, float]:
+        """Resolve (left_in, top_in, width_in, height_in) in inches, resolving inherited placeholder bounds."""
+        raw_l = shape.left.inches if (hasattr(shape, "left") and shape.left is not None) else None
+        raw_t = shape.top.inches if (hasattr(shape, "top") and shape.top is not None) else None
+        raw_w = shape.width.inches if (hasattr(shape, "width") and shape.width is not None) else None
+        raw_h = shape.height.inches if (hasattr(shape, "height") and shape.height is not None) else None
+
+        is_missing = (
+            raw_l is None or raw_t is None or raw_w is None or raw_h is None
+            or (raw_l == 0.0 and raw_t == 0.0 and raw_w == 0.0 and raw_h == 0.0)
+        )
+
+        if is_missing and slide is not None and getattr(shape, "is_placeholder", False):
+            try:
+                ph_fmt = shape.placeholder_format
+                p_idx = getattr(ph_fmt, "idx", None)
+                p_type = getattr(ph_fmt, "type", None)
+                layout = getattr(slide, "slide_layout", None)
+                if layout and hasattr(layout, "placeholders"):
+                    match_ph = None
+                    for l_ph in layout.placeholders:
+                        l_fmt = getattr(l_ph, "placeholder_format", None)
+                        if l_fmt and l_fmt.idx == p_idx:
+                            match_ph = l_ph
+                            break
+                    if match_ph is None and p_type is not None:
+                        for l_ph in layout.placeholders:
+                            l_fmt = getattr(l_ph, "placeholder_format", None)
+                            if l_fmt and l_fmt.type == p_type:
+                                match_ph = l_ph
+                                break
+                    if match_ph is not None:
+                        if raw_l is None or raw_l == 0.0:
+                            raw_l = match_ph.left.inches if match_ph.left is not None else 0.5
+                        if raw_t is None or raw_t == 0.0:
+                            raw_t = match_ph.top.inches if match_ph.top is not None else 0.5
+                        if raw_w is None or raw_w == 0.0:
+                            raw_w = match_ph.width.inches if match_ph.width is not None else 2.0
+                        if raw_h is None or raw_h == 0.0:
+                            raw_h = match_ph.height.inches if match_ph.height is not None else 1.0
+            except Exception:
+                pass
+
+        left_in = raw_l if raw_l is not None else 0.5
+        top_in = raw_t if raw_t is not None else 0.5
+        width_in = raw_w if raw_w is not None else 2.0
+        height_in = raw_h if raw_h is not None else 1.0
+        return left_in, top_in, width_in, height_in
+
+    @staticmethod
+    def _fit_picture_in_slot(pic, slot_x: float, slot_y: float, slot_w: float, slot_h: float) -> None:
+        """Fit picture inside target slot preserving its original aspect ratio, centered in slot."""
+        try:
+            orig_w = pic.width.inches if (pic.width and pic.width.inches > 0) else 1.0
+            orig_h = pic.height.inches if (pic.height and pic.height.inches > 0) else 1.0
+        except Exception:
+            orig_w, orig_h = 1.0, 1.0
+
+        img_ar = orig_w / orig_h if orig_h > 0 else 1.0
+        slot_ar = slot_w / slot_h if slot_h > 0 else 1.0
+
+        if img_ar > slot_ar:
+            final_w = slot_w
+            final_h = slot_w / img_ar
+        else:
+            final_h = slot_h
+            final_w = slot_h * img_ar
+
+        final_x = slot_x + (slot_w - final_w) / 2.0
+        final_y = slot_y + (slot_h - final_h) / 2.0
+
+        try:
+            pic.left = Inches(round(final_x, 3))
+            pic.top = Inches(round(final_y, 3))
+            pic.width = Inches(round(final_w, 3))
+            pic.height = Inches(round(final_h, 3))
+        except Exception:
+            pass
+
     def _reflow_and_govern_slide(
         self, slide, slide_idx: int, total_slides: int, archetype: SlideArchetype
     ) -> None:
         """Execute archetype reflow rules and govern all shapes."""
+        # 0. Inherited placeholder coordinate resolution
+        for s in slide.shapes:
+            if getattr(s, "is_placeholder", False):
+                try:
+                    raw_l, raw_t, raw_w, raw_h = self._resolve_shape_bounds(s, slide)
+                    if s.left is None or s.left.inches == 0:
+                        s.left = Inches(raw_l)
+                    if s.top is None or s.top.inches == 0:
+                        s.top = Inches(raw_t)
+                    if s.width is None or s.width.inches == 0:
+                        s.width = Inches(raw_w)
+                    if s.height is None or s.height.inches == 0:
+                        s.height = Inches(raw_h)
+                except Exception:
+                    pass
+
         title_shape, subtitle_shape = self._find_slide_title_and_subtitle(slide)
         if archetype not in (SlideArchetype.COVER_SLIDE, SlideArchetype.SECTION_SPLITTER):
             subtitle_shape = None
@@ -647,7 +743,7 @@ class ArchetypeEngine:
 
                 # Collision Prevention: Any non-title shape whose top < 1.40" shifted down to >= 1.45"
                 for s in slide.shapes:
-                    if s == title_shape:
+                    if s == title_shape or getattr(s, "has_table", False):
                         continue
                     s_name = getattr(s, "name", "") or ""
                     if "BrandMorph" in s_name or "BottomFrame" in s_name or "Logo_Stamp" in s_name:
@@ -684,127 +780,128 @@ class ArchetypeEngine:
             and not getattr(s, "name", "").startswith("BrandMorph")
         ]
 
-        # Case B1: Team or Gallery Grid (Slide 7 archetype)
-        if archetype == SlideArchetype.TEAM_OR_GALLERY_GRID and len(pictures) >= 3:
-            num_pics = min(4, len(pictures))
-            pictures.sort(key=lambda p: p.left.inches if hasattr(p, "left") and p.left else 0.0)
-            col_width = 2.55
-            gap = 0.50
-            start_left = 0.85
-            top_pos = 1.6
+        table_shapes = [s for s in slide.shapes if getattr(s, "has_table", False) and s.has_table]
 
-            for i in range(num_pics):
-                pic = pictures[i]
-                cur_left = start_left + i * (col_width + gap)
-                try:
-                    pic.left = Inches(cur_left)
-                    pic.top = Inches(top_pos)
-                    pic.width = Inches(col_width)
-                    pic.height = Inches(col_width)
-                except Exception:
-                    pass
+        # Case B1: Slide with Table
+        if table_shapes:
+            for ts in table_shapes:
+                self._style_table_corporate(ts.table)
 
-            # Align caption text boxes directly beneath corresponding photos
-            content_text_shapes.sort(key=lambda s: s.left.inches if hasattr(s, "left") and s.left else 0.0)
-            for i, ts in enumerate(content_text_shapes):
-                col_idx = i % num_pics
-                cur_left = start_left + col_idx * (col_width + gap)
-                is_role = i >= num_pics
-                t_top = 4.35 if not is_role else 4.75
-                try:
-                    ts.left = Inches(cur_left)
-                    ts.top = Inches(t_top)
-                    ts.width = Inches(col_width)
-                    ts.height = Inches(0.35)
-                except Exception:
-                    pass
+            if content_text_shapes:
+                # Mixed Text + Table (e.g. Slide 10: Title + 2 intro text boxes + Table)
+                n_intro = len(content_text_shapes)
+                content_text_shapes.sort(key=lambda s: s.left.inches if hasattr(s, "left") and s.left else 0.0)
+                if n_intro == 1:
+                    content_text_shapes[0].left = Inches(0.80)
+                    content_text_shapes[0].top = Inches(1.45)
+                    content_text_shapes[0].width = Inches(11.73)
+                    content_text_shapes[0].height = Inches(1.15)
+                    self._inject_necessity_card_if_needed(slide, content_text_shapes[0])
+                elif n_intro >= 2:
+                    card_w = 5.70
+                    gap = 0.33
+                    for i, txt_s in enumerate(content_text_shapes[:2]):
+                        txt_s.left = Inches(0.80 + i * (card_w + gap))
+                        txt_s.top = Inches(1.45)
+                        txt_s.width = Inches(card_w)
+                        txt_s.height = Inches(1.15)
+                        self._inject_necessity_card_if_needed(slide, txt_s)
 
-        # Case B2: Content slide with both text blocks AND 1-4 images (e.g. Slides 2, 3, 11)
-        elif 1 <= len(pictures) <= 4 and content_text_shapes and archetype in (
-            SlideArchetype.AGENDA_SLIDE,
-            SlideArchetype.MULTI_CARD_CONTENT,
-            SlideArchetype.SECTION_SPLITTER,
-        ):
-            # Arrange images into right-hand visual grid: left=7.1" to 12.68", top=1.35" to 6.65"
-            grid_left = 7.1
-            grid_top = 1.35
-            grid_w = 5.5
-            grid_h = 5.2
-
-            num_pics = len(pictures)
-            if num_pics == 1:
-                try:
-                    pictures[0].left = Inches(grid_left)
-                    pictures[0].top = Inches(grid_top)
-                    pictures[0].width = Inches(grid_w)
-                    pictures[0].height = Inches(grid_h)
-                except Exception:
-                    pass
-            elif num_pics == 2:
-                half_h = 2.45
-                gap_y = 0.3
-                try:
-                    pictures[0].left = Inches(grid_left)
-                    pictures[0].top = Inches(grid_top)
-                    pictures[0].width = Inches(grid_w)
-                    pictures[0].height = Inches(half_h)
-
-                    pictures[1].left = Inches(grid_left)
-                    pictures[1].top = Inches(grid_top + half_h + gap_y)
-                    pictures[1].width = Inches(grid_w)
-                    pictures[1].height = Inches(half_h)
-                except Exception:
-                    pass
-            else:
-                half_w = 2.65
-                half_h = 2.45
-                gap = 0.2
-                for p_idx, pic in enumerate(pictures[:4]):
-                    row = p_idx // 2
-                    col = p_idx % 2
+                # Table positioned below intro text at top=2.85"
+                for ts in table_shapes:
                     try:
-                        pic.left = Inches(grid_left + col * (half_w + gap))
-                        pic.top = Inches(grid_top + row * (half_h + gap))
-                        pic.width = Inches(half_w)
-                        pic.height = Inches(half_h)
+                        ts.left = Inches(0.80)
+                        ts.top = Inches(2.85)
+                        ts.width = Inches(11.73)
+                        current_h = ts.height.inches if ts.height else 3.5
+                        ts.height = Inches(min(3.9, max(2.0, current_h)))
+                    except Exception:
+                        pass
+            else:
+                # Table-only slide: top=1.65", width=11.73", height<=4.8"
+                for ts in table_shapes:
+                    try:
+                        ts.left = Inches(0.80)
+                        ts.top = Inches(1.65)
+                        ts.width = Inches(11.73)
+                        current_h = ts.height.inches if ts.height else 4.0
+                        ts.height = Inches(min(4.8, max(2.5, current_h)))
                     except Exception:
                         pass
 
-            # Reflow text blocks into governed left-hand corporate cards: left=0.65" to 6.75"
-            card_left = 0.65
-            card_width = 6.1
-            n_cards = len(content_text_shapes)
-            avail_h = 5.2
-            card_h = min(2.2, max(1.0, (avail_h - (n_cards - 1) * 0.25) / n_cards))
+        # Case B2: Image-Only Gallery Slides (e.g. Slide 3: 1 to 4 photos, 0 body text)
+        elif len(pictures) >= 1 and not content_text_shapes and archetype not in (
+            SlideArchetype.COVER_SLIDE,
+            SlideArchetype.CLOSING_SLIDE,
+        ):
+            k = min(4, len(pictures))
+            pictures.sort(key=lambda p: p.left.inches if hasattr(p, "left") and p.left else 0.0)
+            gap_configs = {
+                1: (11.73, 0.0),
+                2: (5.66, 0.40),
+                3: (3.68, 0.34),
+                4: (2.68, 0.33),
+            }
+            slot_w, gap = gap_configs[k]
+            for i, pic in enumerate(pictures[:k]):
+                sx = 0.80 + i * (slot_w + gap)
+                sy = 1.65
+                sh = 4.85
+                self._fit_picture_in_slot(pic, sx, sy, slot_w, sh)
 
+        # Case B3: Content slide with both text blocks AND 1-4 images (e.g. Slides 4, 9)
+        elif 1 <= len(pictures) <= 4 and content_text_shapes and archetype not in (
+            SlideArchetype.COVER_SLIDE,
+            SlideArchetype.CLOSING_SLIDE,
+        ):
+            # Left column: text shapes (left=0.80", width=5.65", top=1.55", height=5.10")
+            n_cards = len(content_text_shapes)
+            avail_h = 5.10
+            card_h = min(2.4, max(1.0, (avail_h - (n_cards - 1) * 0.25) / n_cards))
+            content_text_shapes.sort(key=lambda s: s.top.inches if hasattr(s, "top") and s.top else 0.0)
             for c_idx, ts in enumerate(content_text_shapes):
-                c_top = grid_top + c_idx * (card_h + 0.25)
+                c_top = 1.55 + c_idx * (card_h + 0.25)
                 try:
-                    ts.left = Inches(card_left)
+                    ts.left = Inches(0.80)
                     ts.top = Inches(c_top)
-                    ts.width = Inches(card_width)
+                    ts.width = Inches(5.65)
                     ts.height = Inches(card_h)
                 except Exception:
                     pass
+                self._inject_necessity_card_if_needed(slide, ts)
 
-        # Case B3: Data Table Slide (or any slide containing a Table)
-        table_shapes = [s for s in slide.shapes if getattr(s, "has_table", False) and s.has_table]
-        for ts in table_shapes:
-            try:
-                # Table Bounding Box: Position cleanly below top-left title (left=0.80", top=1.65", width=11.73", height<=4.8" max)
-                ts.left = Inches(0.80)
-                ts.top = Inches(1.65)
-                ts.width = Inches(11.73)
-                current_h = ts.height.inches if ts.height else 4.0
-                ts.height = Inches(min(4.8, max(2.5, current_h)))
-            except Exception:
-                pass
-            self._style_table_corporate(ts.table)
+            # Right column: images (left=7.10", width=5.43", top=1.55", height=5.10") with aspect ratio preserved
+            num_pics = len(pictures)
+            pictures.sort(key=lambda p: p.left.inches if hasattr(p, "left") and p.left else 0.0)
+            if num_pics == 1:
+                self._fit_picture_in_slot(pictures[0], 7.10, 1.55, 5.43, 5.10)
+            elif num_pics == 2:
+                half_h = 2.40
+                gap_y = 0.30
+                self._fit_picture_in_slot(pictures[0], 7.10, 1.55, 5.43, half_h)
+                self._fit_picture_in_slot(pictures[1], 7.10, 1.55 + half_h + gap_y, 5.43, half_h)
+            else:
+                half_w = 2.55
+                half_h = 2.40
+                gap_x = 0.33
+                gap_y = 0.30
+                for p_idx, pic in enumerate(pictures[:4]):
+                    row = p_idx // 2
+                    col = p_idx % 2
+                    self._fit_picture_in_slot(
+                        pic,
+                        7.10 + col * (half_w + gap_x),
+                        1.55 + row * (half_h + gap_y),
+                        half_w,
+                        half_h,
+                    )
 
         # Case B4: Multi-card content (zero pictures, 1-4 content cards)
-        if archetype == SlideArchetype.MULTI_CARD_CONTENT and len(pictures) == 0 and 1 <= len(content_text_shapes) <= 4:
+        elif len(pictures) == 0 and 1 <= len(content_text_shapes) <= 4 and archetype not in (
+            SlideArchetype.COVER_SLIDE,
+            SlideArchetype.CLOSING_SLIDE,
+        ):
             k = len(content_text_shapes)
-            # Golden Pair constants: 1 card = 11.73", 2 cards = 5.70" (gap 0.33"), 3 cards = 3.68" (gap 0.34"), 4 cards = 2.68" (gap 0.33")
             card_configs = {
                 1: (11.73, 0.0),
                 2: (5.70, 0.33),
@@ -813,8 +910,8 @@ class ArchetypeEngine:
             }
             card_w, gap = card_configs[k]
             start_left = 0.80
-            top_pos = 1.65
-            card_h = 4.80
+            top_pos = 1.55
+            card_h = 5.10
 
             content_text_shapes.sort(key=lambda s: s.left.inches if hasattr(s, "left") and s.left else 0.0)
             for i, ts in enumerate(content_text_shapes):
@@ -826,18 +923,6 @@ class ArchetypeEngine:
                     ts.height = Inches(card_h)
                 except Exception:
                     pass
-
-        # ---------------------------------------------------------------------
-        # Necessity-First Card & Structural Shape Injection
-        # On content slides, inject backing corporate cards behind loose text blocks
-        # ---------------------------------------------------------------------
-        if archetype in (
-            SlideArchetype.MULTI_CARD_CONTENT,
-            SlideArchetype.AGENDA_SLIDE,
-            SlideArchetype.SECTION_SPLITTER,
-            SlideArchetype.PROCESS_TIMELINE,
-        ):
-            for ts in content_text_shapes:
                 self._inject_necessity_card_if_needed(slide, ts)
 
         # ---------------------------------------------------------------------
@@ -909,15 +994,20 @@ class ArchetypeEngine:
             if hasattr(accent, "line") and accent.line:
                 accent.line.fill.background()
 
-            # CRITICAL Z-ORDER: Move card and accent behind ts in spTree
-            spTree = slide.shapes._spTree
-            spTree.remove(card._element)
-            ts_idx = list(spTree).index(ts._element)
-            spTree.insert(ts_idx, card._element)
-
-            spTree.remove(accent._element)
-            ts_idx = list(spTree).index(ts._element)
-            spTree.insert(ts_idx, accent._element)
+            # CRITICAL Z-ORDER: Place card and accent right before ts._element using addprevious!
+            # Never insert at index 0 or 1 of spTree!
+            try:
+                ts._element.addprevious(card._element)
+                ts._element.addprevious(accent._element)
+            except Exception:
+                spTree = slide.shapes._spTree
+                if card._element in spTree:
+                    spTree.remove(card._element)
+                if accent._element in spTree:
+                    spTree.remove(accent._element)
+                ts_idx = max(2, list(spTree).index(ts._element))
+                spTree.insert(ts_idx, card._element)
+                spTree.insert(ts_idx + 1, accent._element)
 
             # Set internal padding on the text frame: left + 0.22", top + 0.18", width - 0.44", height - 0.32"
             ts.left = Inches(t_l + 0.22)
@@ -1046,7 +1136,7 @@ class ArchetypeEngine:
                 elif p_is_sub:
                     target_font = "Arial"
                     current_pt = run.font.size.pt if run.font and run.font.size else 14.0
-                    target_pt = max(12.0, min(16.0, current_pt))
+                    target_pt = max(13.0, min(16.0, current_pt))
                     target_bold = True
                     target_italic = False
                 else:
@@ -1114,17 +1204,37 @@ class ArchetypeEngine:
             self._inject_para_def_rpr(p, is_title=is_title, is_bright_bg=is_bright_bg)
 
     def _inject_run_xml(self, run, font_family: str, color_hex: str) -> None:
-        """Inject explicit DrawingML <a:solidFill> and typeface tags into run XML."""
+        """Inject explicit DrawingML <a:solidFill> and typeface tags into run XML in schema-compliant order."""
         try:
+            clean_hex = color_hex.lstrip("#")
+            if len(clean_hex) == 6:
+                r_val = int(clean_hex[0:2], 16)
+                g_val = int(clean_hex[2:4], 16)
+                b_val = int(clean_hex[4:6], 16)
+                run.font.color.rgb = RGBColor(r_val, g_val, b_val)
+            run.font.name = font_family
+
             rPr = run._r.get_or_add_rPr()
             for child in list(rPr):
                 tag = etree.QName(child).localname
                 if tag in ("solidFill", "schemeClr", "noFill", "sysClr", "gradFill", "blipFill"):
                     rPr.remove(child)
 
-            solidFill = etree.SubElement(rPr, f"{{{_A}}}solidFill")
+            solidFill = etree.Element(f"{{{_A}}}solidFill")
             srgb = etree.SubElement(solidFill, f"{{{_A}}}srgbClr")
-            srgb.set("val", color_hex)
+            srgb.set("val", clean_hex)
+
+            first_typeface = None
+            for child in list(rPr):
+                tag = etree.QName(child).localname
+                if tag in ("latin", "ea", "cs", "sym", "hlinkClick", "hlinkMouseOver", "rtl", "extLst"):
+                    first_typeface = child
+                    break
+
+            if first_typeface is not None:
+                first_typeface.addprevious(solidFill)
+            else:
+                rPr.append(solidFill)
 
             for tag in ("latin", "cs", "ea"):
                 el = rPr.find(f"{{{_A}}}{tag}")
@@ -1135,7 +1245,7 @@ class ArchetypeEngine:
             pass
 
     def _inject_para_def_rpr(self, para, is_title: bool, is_bright_bg: bool) -> None:
-        """Inject fallback paragraph default run properties."""
+        """Inject fallback paragraph default run properties in schema-compliant order."""
         try:
             pPr = para._p.get_or_add_pPr()
             defRPr = pPr.find(f"{{{_A}}}defRPr")
@@ -1147,10 +1257,22 @@ class ArchetypeEngine:
                 if tag in ("solidFill", "schemeClr", "noFill", "sysClr"):
                     defRPr.remove(child)
 
-            solidFill = etree.SubElement(defRPr, f"{{{_A}}}solidFill")
+            solidFill = etree.Element(f"{{{_A}}}solidFill")
             srgb = etree.SubElement(solidFill, f"{{{_A}}}srgbClr")
             color_hex = HEX_DARK_NAVY if is_bright_bg else (HEX_CORP_GOLD if is_title else HEX_WHITE)
             srgb.set("val", color_hex)
+
+            first_typeface = None
+            for child in list(defRPr):
+                tag = etree.QName(child).localname
+                if tag in ("latin", "ea", "cs", "sym", "hlinkClick", "hlinkMouseOver", "rtl", "extLst"):
+                    first_typeface = child
+                    break
+
+            if first_typeface is not None:
+                first_typeface.addprevious(solidFill)
+            else:
+                defRPr.append(solidFill)
 
             family = "Times New Roman" if is_title else "Arial"
             for tag in ("latin", "cs", "ea"):
@@ -1160,3 +1282,4 @@ class ArchetypeEngine:
                 el.set("typeface", family)
         except Exception:
             pass
+

@@ -18,7 +18,8 @@ def rgb_luminance(rgb: RGBColor) -> float:
     return 0.299 * r + 0.587 * g + 0.114 * b
 
 def force_run_xml_color(run, rgb: RGBColor):
-    """Explicitly write <a:solidFill><a:srgbClr val="..."/></a:solidFill> to ensure zero black text inheritance."""
+    """Explicitly write <a:solidFill><a:srgbClr val="..."/></a:solidFill> in schema-compliant order."""
+    run.font.color.rgb = rgb
     rPr = run._r.get_or_add_rPr()
     for tag in ("a:solidFill", "a:gradFill", "a:pattFill", "a:blipFill", "a:noFill", "a:grpFill"):
         for el in rPr.findall(qn(tag)):
@@ -26,7 +27,12 @@ def force_run_xml_color(run, rgb: RGBColor):
     solid_fill = rPr.makeelement(qn("a:solidFill"), {})
     srgb = solid_fill.makeelement(qn("a:srgbClr"), {"val": str(rgb)})
     solid_fill.append(srgb)
-    rPr.insert(0, solid_fill)
+    latin = rPr.find(qn("a:latin"))
+    if latin is not None:
+        latin.addprevious(solid_fill)
+    else:
+        rPr.insert(0, solid_fill)
+
 
 class BrandTokens:
     BG_DARK = RGBColor(0, 31, 51)          # #001F33 Deep Navy

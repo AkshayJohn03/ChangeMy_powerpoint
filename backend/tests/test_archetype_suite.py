@@ -495,3 +495,153 @@ def test_raw_mode_vs_governed_mode_preservation(tmp_path):
     assert len(gov_ast) == 1
     assert gov_ast[0]["background_color"] in ("#001F33", "#030C1E")
 
+
+def test_13_slide_template_reproduction(tmp_path):
+    """Verify 13-slide template reproduction matching Presentation 2.pptx."""
+    deck_path = tmp_path / "presentation_2_replica.pptx"
+    out_path = tmp_path / "morphed_presentation_2.pptx"
+
+    prs = pptx.Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    blank_layout = prs.slide_layouts[6]
+    img_data = _tiny_png_bytes()
+
+    # Slide 1 (Index 0): Cover with title only
+    s1 = prs.slides.add_slide(blank_layout)
+    t1 = s1.shapes.add_textbox(Inches(1.0), Inches(2.5), Inches(10.0), Inches(1.5))
+    t1.text_frame.paragraphs[0].text = "Annual Corporate Strategy"
+    t1.text_frame.paragraphs[0].font.size = Pt(36)
+
+    # Slide 2 (Index 1): Agenda
+    s2 = prs.slides.add_slide(blank_layout)
+    t2 = s2.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(6.0), Inches(0.8))
+    t2.text_frame.paragraphs[0].text = "Executive Agenda"
+    for i in range(3):
+        box = s2.shapes.add_textbox(Inches(0.8), Inches(1.8 + i * 1.5), Inches(5.5), Inches(1.0))
+        box.text_frame.paragraphs[0].text = f"Discussion Topic {i+1}"
+
+    # Slide 3 (Index 2): Title + 3 images (0 body text)
+    s3 = prs.slides.add_slide(blank_layout)
+    t3 = s3.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t3.text_frame.paragraphs[0].text = "Visual Asset Showcase"
+    for i in range(3):
+        s3.shapes.add_picture(io.BytesIO(img_data), Inches(2.0 + i * 2.5), Inches(2.0), Inches(2.0), Inches(2.0))
+
+    # Slides 4-8 (Index 3-7): Multi-section content slides
+    for idx in range(4, 9):
+        s = prs.slides.add_slide(blank_layout)
+        t = s.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+        t.text_frame.paragraphs[0].text = f"Section Analysis {idx}"
+        b = s.shapes.add_textbox(Inches(0.8), Inches(2.0), Inches(6.0), Inches(2.0))
+        b.text_frame.paragraphs[0].text = "Operational expansion across strategic accounts."
+
+    # Slide 9 (Index 8): Title + portrait image (w=2.0", h=5.0") + body text
+    s9 = prs.slides.add_slide(blank_layout)
+    t9 = s9.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t9.text_frame.paragraphs[0].text = "Botanical Research & Specimens"
+    s9.shapes.add_picture(io.BytesIO(img_data), Inches(7.0), Inches(1.5), Inches(2.0), Inches(5.0))
+    b9 = s9.shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(5.0), Inches(3.0))
+    p9 = b9.text_frame.paragraphs[0]
+    p9.text = "Morphological Classification"
+    p9.font.bold = True
+    p9_body = b9.text_frame.add_paragraph()
+    p9_body.text = "Detailed inspection of cellular structures and vertical stems."
+
+    # Slide 10 (Index 9): Title + 2 intro text boxes + 5-row Table
+    s10 = prs.slides.add_slide(blank_layout)
+    t10 = s10.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t10.text_frame.paragraphs[0].text = "Performance & Governance Metrics"
+    intro1 = s10.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(5.0), Inches(1.0))
+    intro1.text_frame.paragraphs[0].text = "Executive summary of quarterly performance across divisions."
+    intro2 = s10.shapes.add_textbox(Inches(6.5), Inches(1.4), Inches(5.0), Inches(1.0))
+    intro2.text_frame.paragraphs[0].text = "Key audit findings and cross-functional alignment initiatives."
+    tbl = s10.shapes.add_table(5, 3, Inches(0.8), Inches(2.6), Inches(11.0), Inches(3.5))
+    for r in range(5):
+        for c in range(3):
+            tbl.table.cell(r, c).text = f"R{r}C{c}"
+
+    # Slide 11 (Index 10): Content slide
+    s11 = prs.slides.add_slide(blank_layout)
+    t11 = s11.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t11.text_frame.paragraphs[0].text = "Strategic Roadmap"
+    b11 = s11.shapes.add_textbox(Inches(0.8), Inches(2.0), Inches(6.0), Inches(2.0))
+    b11.text_frame.paragraphs[0].text = "Key execution milestones."
+
+    # Slide 12 (Index 11): Table only (0 body text)
+    s12 = prs.slides.add_slide(blank_layout)
+    t12 = s12.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t12.text_frame.paragraphs[0].text = "Financial Statements"
+    tbl12 = s12.shapes.add_table(4, 3, Inches(0.8), Inches(1.8), Inches(11.0), Inches(4.0))
+    for r in range(4):
+        for c in range(3):
+            tbl12.table.cell(r, c).text = f"Data {r}-{c}"
+
+    # Slide 13 (Index 12): Closing slide
+    s13 = prs.slides.add_slide(blank_layout)
+    t13 = s13.shapes.add_textbox(Inches(1.0), Inches(2.5), Inches(8.0), Inches(1.0))
+    t13.text_frame.paragraphs[0].text = "Thank You"
+
+    prs.save(str(deck_path))
+    assert len(prs.slides) == 13
+
+    # 1. Parse raw deck
+    raw_dec = SlideDecompiler(str(deck_path), raw_mode=True)
+    raw_ast = raw_dec.parse_deck()
+    assert len(raw_ast) == 13
+    assert raw_ast[0]["background_color"] == "#FFFFFF"
+
+    # 2. Morph deck
+    dna = BrandDNA.load("enterprise_navy")
+    MorphPipeline(dna).run(deck_path, out_path)
+
+    # 3. Verify output .pptx opens cleanly in python-pptx
+    m_prs = pptx.Presentation(str(out_path))
+    assert len(m_prs.slides) == 13
+
+    # 4. Slide 3: Assert images span full width (min_x < 2.0" to max_x + w > 10.0")
+    m_s3 = m_prs.slides[2]
+    s3_pics = [s for s in m_s3.shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE or hasattr(s, "image")]
+    assert len(s3_pics) == 3
+    min_x = min(p.left.inches for p in s3_pics)
+    max_right = max(p.left.inches + p.width.inches for p in s3_pics)
+    assert min_x < 2.0, f"Expected min_x < 2.0, got {min_x}"
+    assert max_right > 10.0, f"Expected max_right > 10.0, got {max_right}"
+
+    # 5. Slide 9: Assert portrait image aspect ratio preserved (w < h) and does not overlap text
+    m_s9 = m_prs.slides[8]
+    s9_pic = [s for s in m_s9.shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE or hasattr(s, "image")][0]
+    assert s9_pic.width.inches < s9_pic.height.inches, f"Expected portrait aspect ratio w < h, got w={s9_pic.width.inches}, h={s9_pic.height.inches}"
+    s9_texts = [s for s in m_s9.shapes if s.has_text_frame and not getattr(s, "name", "").startswith("BrandMorph")]
+    for ts in s9_texts:
+        if "Botanical Research" not in ts.text_frame.text:
+            assert ts.left.inches + ts.width.inches <= s9_pic.left.inches + 0.15, "Text overlaps portrait image"
+
+    # 6. Slide 10: Assert intro text top < table.top and zero overlap
+    m_s10 = m_prs.slides[9]
+    s10_table = [s for s in m_s10.shapes if getattr(s, "has_table", False) and s.has_table][0]
+    s10_intros = [
+        s for s in m_s10.shapes
+        if s.has_text_frame and "Performance" not in s.text_frame.text and not getattr(s, "name", "").startswith("BrandMorph")
+    ]
+    assert len(s10_intros) >= 2
+    for ts in s10_intros:
+        assert ts.top.inches < s10_table.top.inches
+        assert ts.top.inches + ts.height.inches <= s10_table.top.inches + 0.15, "Intro text overlaps table"
+
+    # 7. Assert every <p:spTree> has <p:nvGrpSpPr> at index 0 and <p:grpSpPr> at index 1
+    from lxml import etree
+    for s_idx, slide in enumerate(m_prs.slides):
+        spTree_children = list(slide.shapes._spTree)
+        tag0 = etree.QName(spTree_children[0]).localname
+        tag1 = etree.QName(spTree_children[1]).localname
+        assert tag0 == "nvGrpSpPr", f"Slide {s_idx+1} spTree child 0 is {tag0}, expected nvGrpSpPr"
+        assert tag1 == "grpSpPr", f"Slide {s_idx+1} spTree child 1 is {tag1}, expected grpSpPr"
+
+    # 8. Assert raw_mode=True differs from raw_mode=False
+    gov_dec = SlideDecompiler(str(out_path), raw_mode=False)
+    gov_ast = gov_dec.parse_deck()
+    assert raw_ast[0]["background_color"] != gov_ast[0]["background_color"]
+    assert gov_ast[0]["background_color"] in ("#001F33", "#030C1E")
+
+
