@@ -1,0 +1,736 @@
+{
+  "global": {
+    "color": {
+      "primary-blue": {
+        "50": {
+          "value": "#EFF6FB",
+          "type": "color"
+        },
+        "100": {
+          "value": "#DCEAF6",
+          "type": "color",
+          "description": "Soft Ice Blue Accent"
+        },
+        "200": {
+          "value": "#B9D5EC",
+          "type": "color"
+        },
+        "300": {
+          "value": "#93BCE1",
+          "type": "color"
+        },
+        "400": {
+          "value": "#6EA1D6",
+          "type": "color"
+        },
+        "500": {
+          "value": "#2B74B6",
+          "type": "color",
+          "description": "THRIFTHAVEN CORE PRIMARY BLUE"
+        },
+        "600": {
+          "value": "#0F78B0",
+          "type": "color",
+          "description": "THRIFTHAVEN HOVER / DEEP BRAND BLUE"
+        },
+        "700": {
+          "value": "#164A7A",
+          "type": "color"
+        },
+        "800": {
+          "value": "#10385C",
+          "type": "color"
+        },
+        "900": {
+          "value": "#0A253D",
+          "type": "color",
+          "description": "THRIFTHAVEN DARK NAVY CONTAINER"
+        },
+        "950": {
+          "value": "#030C1E",
+          "type": "color",
+          "description": "Amazon DT Deep Canvas Dark Base"
+        }
+      },
+      "sage-olive": {
+        "50": {
+          "value": "#F5F7F4",
+          "type": "color"
+        },
+        "100": {
+          "value": "#E6EBE4",
+          "type": "color"
+        },
+        "200": {
+          "value": "#CED6CC",
+          "type": "color"
+        },
+        "300": {
+          "value": "#AEBBAB",
+          "type": "color"
+        },
+        "400": {
+          "value": "#8A9A86",
+          "type": "color"
+        },
+        "500": {
+          "value": "#6C7A68",
+          "type": "color",
+          "description": "THRIFTHAVEN SECONDARY SAGE OLIVE"
+        },
+        "600": {
+          "value": "#545F51",
+          "type": "color"
+        },
+        "700": {
+          "value": "#444D42",
+          "type": "color"
+        },
+        "800": {
+          "value": "#383F36",
+          "type": "color",
+          "description": "THRIFTHAVEN DARK SAGE OLIVE"
+        },
+        "900": {
+          "value": "#30352E",
+          "type": "color"
+        }
+      },
+      "warm-gold": {
+        "50": {
+          "value": "#FFFBF0",
+          "type": "color"
+        },
+        "100": {
+          "value": "#FFF3D6",
+          "type": "color"
+        },
+        "200": {
+          "value": "#FFE4A3",
+          "type": "color"
+        },
+        "300": {
+          "value": "#FFD470",
+          "type": "color"
+        },
+        "400": {
+          "value": "#FFB83D",
+          "type": "color"
+        },
+        "500": {
+          "value": "#FF9900",
+          "type": "color",
+          "description": "THRIFTHAVEN WARM GOLD CORE"
+        },
+        "600": {
+          "value": "#CC7A00",
+          "type": "color"
+        },
+        "700": {
+          "value": "#995C00",
+          "type": "color"
+        },
+        "800": {
+          "value": "#663D00",
+          "type": "color"
+        },
+        "900": {
+          "value": "#4D2600",
+          "type": "color"
+        }
+      },
+      "cyan-uplink": {
+        "400": {
+          "value": "#38BDF8",
+          "type": "color"
+        },
+        "500": {
+          "value": "#029FA0",
+          "type": "color",
+          "description": "THRIFTHAVEN CYAN UPLINK"
+        }
+      },
+      "emerald": {
+        "50": {
+          "value": "#ECFDF5",
+          "type": "color"
+        },
+        "500": {
+          "value": "#10B981",
+          "type": "color",
+          "description": "High Capacity / Verified Green"
+        },
+        "900": {
+          "value": "#064E3B",
+          "type": "color"
+        }
+      },
+      "rose": {
+        "50": {
+          "value": "#FFF1F2",
+          "type": "color"
+        },
+        "500": {
+          "value": "#EF4444",
+          "type": "color",
+          "description": "Low Capacity / Critical Red"
+        },
+        "900": {
+          "value": "#881337",
+          "type": "color"
+        }
+      },
+      "amber": {
+        "500": {
+          "value": "#F59E0B",
+          "type": "color",
+          "description": "Medium Capacity Warning Yellow"
+        }
+      }
+    },
+    "fontFamilies": {
+      "display": {
+        "value": "Cabinet Grotesk",
+        "type": "fontFamilies"
+      },
+      "body": {
+        "value": "Inter",
+        "type": "fontFamilies"
+      },
+      "mono": {
+        "value": "JetBrains Mono",
+        "type": "fontFamilies"
+      }
+    },
+    "fontSizes": {
+      "type-12": {
+        "value": "12",
+        "type": "fontSizes"
+      },
+      "type-14": {
+        "value": "14",
+        "type": "fontSizes"
+      },
+      "type-16": {
+        "value": "16",
+        "type": "fontSizes"
+      },
+      "type-18": {
+        "value": "18",
+        "type": "fontSizes"
+      },
+      "type-20": {
+        "value": "20",
+        "type": "fontSizes"
+      },
+      "type-24": {
+        "value": "24",
+        "type": "fontSizes"
+      },
+      "type-32": {
+        "value": "32",
+        "type": "fontSizes"
+      },
+      "type-40": {
+        "value": "40",
+        "type": "fontSizes"
+      },
+      "type-48": {
+        "value": "48",
+        "type": "fontSizes"
+      },
+      "type-64": {
+        "value": "64",
+        "type": "fontSizes"
+      }
+    },
+    "fontWeights": {
+      "regular": {
+        "value": "400",
+        "type": "fontWeights"
+      },
+      "medium": {
+        "value": "500",
+        "type": "fontWeights"
+      },
+      "semiBold": {
+        "value": "600",
+        "type": "fontWeights"
+      },
+      "bold": {
+        "value": "700",
+        "type": "fontWeights"
+      }
+    },
+    "letterSpacing": {
+      "tight": {
+        "value": "-0.02em",
+        "type": "letterSpacing"
+      },
+      "normal": {
+        "value": "0",
+        "type": "letterSpacing"
+      },
+      "wide": {
+        "value": "0.05em",
+        "type": "letterSpacing"
+      },
+      "mono": {
+        "value": "0.1em",
+        "type": "letterSpacing"
+      }
+    },
+    "paragraphSpacing": {
+      "tight": {
+        "value": "4",
+        "type": "paragraphSpacing"
+      },
+      "normal": {
+        "value": "8",
+        "type": "paragraphSpacing"
+      },
+      "relaxed": {
+        "value": "16",
+        "type": "paragraphSpacing"
+      }
+    },
+    "textCase": {
+      "uppercase": {
+        "value": "uppercase",
+        "type": "textCase"
+      },
+      "lowercase": {
+        "value": "lowercase",
+        "type": "textCase"
+      },
+      "capitalize": {
+        "value": "capitalize",
+        "type": "textCase"
+      },
+      "none": {
+        "value": "none",
+        "type": "textCase"
+      }
+    },
+    "spacing": {
+      "space-0": {
+        "value": "0",
+        "type": "spacing"
+      },
+      "space-2": {
+        "value": "2",
+        "type": "spacing"
+      },
+      "space-4": {
+        "value": "4",
+        "type": "spacing"
+      },
+      "space-8": {
+        "value": "8",
+        "type": "spacing"
+      },
+      "space-12": {
+        "value": "12",
+        "type": "spacing"
+      },
+      "space-16": {
+        "value": "16",
+        "type": "spacing"
+      },
+      "space-20": {
+        "value": "20",
+        "type": "spacing"
+      },
+      "space-24": {
+        "value": "24",
+        "type": "spacing"
+      },
+      "space-32": {
+        "value": "32",
+        "type": "spacing"
+      },
+      "space-40": {
+        "value": "40",
+        "type": "spacing"
+      },
+      "space-48": {
+        "value": "48",
+        "type": "spacing"
+      },
+      "space-64": {
+        "value": "64",
+        "type": "spacing"
+      },
+      "space-80": {
+        "value": "80",
+        "type": "spacing"
+      },
+      "space-96": {
+        "value": "96",
+        "type": "spacing"
+      }
+    },
+    "sizing": {
+      "touch-target-min": {
+        "value": "48",
+        "type": "sizing"
+      },
+      "icon-sm": {
+        "value": "16",
+        "type": "sizing"
+      },
+      "icon-md": {
+        "value": "24",
+        "type": "sizing"
+      },
+      "icon-lg": {
+        "value": "32",
+        "type": "sizing"
+      },
+      "container-max-width": {
+        "value": "1800",
+        "type": "sizing"
+      }
+    },
+    "breakpoints": {
+      "mobile": {
+        "value": "390",
+        "type": "dimension"
+      },
+      "tablet": {
+        "value": "768",
+        "type": "dimension"
+      },
+      "desktop": {
+        "value": "1200",
+        "type": "dimension"
+      },
+      "wide-safe": {
+        "value": "1800",
+        "type": "dimension"
+      }
+    },
+    "zIndex": {
+      "dropdown": {
+        "value": "1000",
+        "type": "other"
+      },
+      "sticky-header": {
+        "value": "1100",
+        "type": "other"
+      },
+      "modal": {
+        "value": "1200",
+        "type": "other"
+      },
+      "toast": {
+        "value": "1300",
+        "type": "other"
+      }
+    },
+    "borderWidth": {
+      "hairline": {
+        "value": "1",
+        "type": "borderWidth"
+      },
+      "focus": {
+        "value": "2",
+        "type": "borderWidth"
+      },
+      "heavy": {
+        "value": "4",
+        "type": "borderWidth"
+      }
+    },
+    "borderRadius": {
+      "radius-none": {
+        "value": "0",
+        "type": "borderRadius"
+      },
+      "radius-xs": {
+        "value": "2",
+        "type": "borderRadius"
+      },
+      "radius-sm": {
+        "value": "4",
+        "type": "borderRadius"
+      },
+      "radius-md": {
+        "value": "8",
+        "type": "borderRadius"
+      },
+      "radius-lg": {
+        "value": "16",
+        "type": "borderRadius"
+      },
+      "radius-xl": {
+        "value": "24",
+        "type": "borderRadius"
+      },
+      "radius-full": {
+        "value": "9999",
+        "type": "borderRadius"
+      }
+    },
+    "boxShadow": {
+      "shadow-sm": {
+        "type": "boxShadow",
+        "value": {
+          "x": "0",
+          "y": "1",
+          "blur": "2",
+          "spread": "0",
+          "color": "rgba(0,0,0,0.05)",
+          "type": "dropShadow"
+        }
+      },
+      "shadow-md": {
+        "type": "boxShadow",
+        "value": {
+          "x": "0",
+          "y": "4",
+          "blur": "6",
+          "spread": "-1",
+          "color": "rgba(0,0,0,0.1)",
+          "type": "dropShadow"
+        }
+      },
+      "shadow-lg": {
+        "type": "boxShadow",
+        "value": {
+          "x": "0",
+          "y": "10",
+          "blur": "15",
+          "spread": "-3",
+          "color": "rgba(0,0,0,0.1)",
+          "type": "dropShadow"
+        }
+      },
+      "shadow-xl": {
+        "type": "boxShadow",
+        "value": {
+          "x": "0",
+          "y": "20",
+          "blur": "25",
+          "spread": "-5",
+          "color": "rgba(0,0,0,0.2)",
+          "type": "dropShadow"
+        }
+      }
+    },
+    "motion": {
+      "ease-out-smooth": {
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "type": "other"
+      },
+      "duration-fast": {
+        "value": "150ms",
+        "type": "other"
+      },
+      "duration-medium": {
+        "value": "300ms",
+        "type": "other"
+      },
+      "duration-slow": {
+        "value": "500ms",
+        "type": "other"
+      }
+    },
+    "opacity": {
+      "0": {
+        "value": "0%",
+        "type": "opacity"
+      },
+      "10": {
+        "value": "10%",
+        "type": "opacity"
+      },
+      "25": {
+        "value": "25%",
+        "type": "opacity"
+      },
+      "40": {
+        "value": "40%",
+        "type": "opacity"
+      },
+      "50": {
+        "value": "50%",
+        "type": "opacity"
+      },
+      "75": {
+        "value": "75%",
+        "type": "opacity"
+      },
+      "90": {
+        "value": "90%",
+        "type": "opacity"
+      },
+      "100": {
+        "value": "100%",
+        "type": "opacity"
+      }
+    },
+    "boolean": {
+      "is-active": {
+        "value": "true",
+        "type": "boolean"
+      },
+      "is-disabled": {
+        "value": "false",
+        "type": "boolean"
+      },
+      "is-verified": {
+        "value": "true",
+        "type": "boolean"
+      },
+      "show-badge": {
+        "value": "true",
+        "type": "boolean"
+      }
+    }
+  },
+  "semantic": {
+    "color": {
+      "background": {
+        "primary": {
+          "value": "{global.color.primary-blue.900}",
+          "type": "color"
+        },
+        "surface": {
+          "value": "{global.color.primary-blue.950}",
+          "type": "color"
+        },
+        "card": {
+          "value": "{global.color.primary-blue.900}",
+          "type": "color"
+        },
+        "brand-accent": {
+          "value": "{global.color.primary-blue.500}",
+          "type": "color"
+        },
+        "secondary-accent": {
+          "value": "{global.color.sage-olive.500}",
+          "type": "color"
+        },
+        "warm-accent": {
+          "value": "{global.color.warm-gold.500}",
+          "type": "color"
+        },
+        "success-subtle": {
+          "value": "{global.color.emerald.50}",
+          "type": "color"
+        },
+        "error-subtle": {
+          "value": "{global.color.rose.50}",
+          "type": "color"
+        }
+      },
+      "text": {
+        "primary": {
+          "value": "#F8FAFC",
+          "type": "color"
+        },
+        "secondary": {
+          "value": "#CBD5E1",
+          "type": "color"
+        },
+        "muted": {
+          "value": "{global.color.sage-olive.500}",
+          "type": "color"
+        },
+        "on-brand": {
+          "value": "#FFFFFF",
+          "type": "color"
+        },
+        "accent": {
+          "value": "{global.color.warm-gold.500}",
+          "type": "color"
+        }
+      },
+      "border": {
+        "default": {
+          "value": "{global.color.primary-blue.700}",
+          "type": "color"
+        },
+        "accent": {
+          "value": "{global.color.warm-gold.500}",
+          "type": "color"
+        },
+        "brand": {
+          "value": "{global.color.primary-blue.500}",
+          "type": "color"
+        },
+        "focus-ring": {
+          "value": "{global.color.cyan-uplink.500}",
+          "type": "color"
+        },
+        "statusHigh": {
+          "value": "{global.color.emerald.500}",
+          "type": "color"
+        },
+        "statusMedium": {
+          "value": "{global.color.amber.500}",
+          "type": "color"
+        },
+        "statusLow": {
+          "value": "{global.color.rose.500}",
+          "type": "color"
+        }
+      }
+    }
+  },
+  "component": {
+    "button": {
+      "primary": {
+        "background": {
+          "value": "{semantic.color.background.brand-accent}",
+          "type": "color"
+        },
+        "backgroundHover": {
+          "value": "{global.color.primary-blue.600}",
+          "type": "color"
+        },
+        "backgroundActive": {
+          "value": "{global.color.primary-blue.700}",
+          "type": "color"
+        },
+        "text": {
+          "value": "{semantic.color.text.on-brand}",
+          "type": "color"
+        },
+        "borderRadius": {
+          "value": "{global.borderRadius.radius-md}",
+          "type": "borderRadius"
+        },
+        "minHeight": {
+          "value": "{global.sizing.touch-target-min}",
+          "type": "sizing"
+        }
+      }
+    },
+    "trustBadge": {
+      "borderActive": {
+        "value": "{semantic.color.border.accent}",
+        "type": "color"
+      },
+      "borderUplink": {
+        "value": "{global.color.cyan-uplink.500}",
+        "type": "color"
+      },
+      "background": {
+        "value": "#FFFFFF",
+        "type": "color"
+      }
+    },
+    "card": {
+      "elevation": {
+        "value": "{global.boxShadow.shadow-sm}",
+        "type": "boxShadow"
+      },
+      "elevationHover": {
+        "value": "{global.boxShadow.shadow-lg}",
+        "type": "boxShadow"
+      }
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Layers, Palette, Type, Image as ImageIcon, 
   Download, ShieldCheck, Cpu, Upload, Sparkles, 
@@ -6,7 +6,8 @@ import {
   Check, Eye, EyeOff, LayoutTemplate, Award,
   Zap, Server, Target, Monitor, Globe, Database, Lock,
   Activity, Cloud, Bold, Italic, Underline,
-  AlignLeft, AlignCenter, AlignRight, FileText, ChevronDown
+  AlignLeft, AlignCenter, AlignRight, FileText, ChevronDown,
+  RefreshCw, FileUp
 } from 'lucide-react';
 
 interface ASTNode {
@@ -221,18 +222,22 @@ export default function StudioWorkspace() {
   const handleLoadTestPPT = async () => {
     setIsProcessing(true);
     try {
-      const parseRes = await fetch(`${API_BASE}/api/parse_test_ppt`);
-      if (parseRes.ok) {
-        const data = await parseRes.json();
-        if (data.status === 'success' && data.slides?.length > 0) {
-          setSlides(data.slides);
-          setActiveSlideIndex(0);
-          setFileName('TestPPT.pptx');
-          pushStateToHistory(data.slides);
-          setAppPhase('studio');
-          setIsProcessing(false);
-          return;
-        }
+      let data: any = null;
+      try {
+        const parseRes = await fetch(`${API_BASE}/api/parse_test_ppt`);
+        if (parseRes.ok) data = await parseRes.json();
+      } catch {
+        const res = await fetch('/api/demo_ast').catch(() => fetch('http://localhost:8000/api/demo_ast'));
+        if (res && res.ok) data = await res.json();
+      }
+      if (data?.status === 'success' && data.slides?.length > 0) {
+        setSlides(data.slides);
+        setActiveSlideIndex(0);
+        setFileName('TestPPT.pptx');
+        pushStateToHistory(data.slides);
+        setAppPhase('studio');
+        setIsProcessing(false);
+        return;
       }
       createFallbackSlides();
     } catch {

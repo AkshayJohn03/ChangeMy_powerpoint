@@ -30,6 +30,7 @@ def force_run_xml_color(run, rgb: RGBColor):
 
 class BrandTokens:
     BG_DARK = RGBColor(0, 31, 51)          # #001F33 Deep Navy
+    BG_COLOR = RGBColor(0, 31, 51)         # Alias for backward compatibility
     BG_LEGACY = RGBColor(3, 12, 30)        # #030C1E
     CARD_BG = RGBColor(8, 30, 54)          # #081E36 Card Surface Slate
     CARD_ALT = RGBColor(10, 42, 74)        # #0A2A4A Card Surface Alt
@@ -38,10 +39,25 @@ class BrandTokens:
     GOLD = RGBColor(255, 184, 28)          # #FFB81C Corporate Gold
     TEXT_WHITE = RGBColor(255, 255, 255)   # #FFFFFF
     TEXT_DARK = RGBColor(0, 31, 51)        # #001F33 Text for bright badge containers
+    GREEN_BORDER = RGBColor(16, 185, 129)  # #10B981
+    RED_BORDER = RGBColor(239, 68, 68)     # #EF4444
+    TEXT_PRIMARY = RGBColor(248, 250, 252) # #F8FAFC
 
     FONT_TITLE = "Times New Roman"
     FONT_BODY = "Arial"
     FONT_HEADING = "Roboto"
+
+    @staticmethod
+    def hex_to_rgb(hex_str: str, fallback: RGBColor = None) -> RGBColor:
+        if not hex_str:
+            return fallback or RGBColor(255, 255, 255)
+        clean = hex_str.strip().lstrip("#")
+        if len(clean) >= 6:
+            try:
+                return RGBColor(int(clean[0:2], 16), int(clean[2:4], 16), int(clean[4:6], 16))
+            except Exception:
+                pass
+        return fallback or RGBColor(255, 255, 255)
 
 class NativePPTXBuilder:
     def __init__(self):
@@ -97,7 +113,7 @@ class NativePPTXBuilder:
         fill.solid()
         fill.fore_color.rgb = BrandTokens.BG_DARK
 
-        # Optional accent framing line across top
+        # Accent framing line across top
         accent_bar = slide.shapes.add_shape(
             MSO_SHAPE.RECTANGLE,
             Inches(0), Inches(0), Inches(13.333), Inches(0.04)

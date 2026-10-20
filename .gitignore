@@ -4,19 +4,33 @@ session-ses_*.md
 *.joblib
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
 
 # --- Deck-bearing binaries, local outputs, secrets, toolchains ---
 *.pptx
 *.ppt
+!backend/samples/sample_legacy_pitch.pptx
+!backend/examples/*.pptx
+
 *.log
 build/
 dist/
+ui/dist/
 *.exe
 *.msi
 venv/
 .venv/
 node_modules/
 .env
-.env.local
-ui/dist/
-models/*.joblib
+.env.*
+!.env.example
+.mcp.json
+.vercel
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

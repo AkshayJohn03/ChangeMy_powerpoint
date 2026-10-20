@@ -1,13 +1,31 @@
 {
-  "buildCommand": "cd ui && npm install && npm run build",
-  "outputDirectory": "ui/dist",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd brandmorph-studio && npm install && npm run build",
+  "outputDirectory": "brandmorph-studio/dist",
+  "framework": "vite",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/index.py": {
       "runtime": "python3.11"
     }
-  }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
 }
