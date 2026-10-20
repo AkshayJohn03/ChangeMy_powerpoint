@@ -10,8 +10,10 @@ CANONICAL_LAYOUTS = {
 DEFAULT_BODY_FONT = "roboto"
 
 BRAND_COLORS = {
-    "base_dark": "030C1E",
-    "card_surface": "081632",
+    "base_dark": "001F33",
+    "legacy_dark": "030C1E",
+    "card_surface": "081E36",
+    "card_alt": "0A2A4A",
     "gold": "FFB81C",
     "aqua": "00FFFF",
     "white": "FFFFFF",

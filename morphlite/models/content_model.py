@@ -9,11 +9,33 @@ a typed slides spec (the reverse direction lives in morphlite/spec/slides_schema
 from __future__ import annotations
 
 import dataclasses
+import re
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
 import pptx
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+_X_ESCAPE_RE = re.compile(r"_x([0-9A-Fa-f]{4})_")
+
+
+def _sanitize_text(text: str) -> str:
+    """Decode OOXML _xHHHH_ escapes (e.g. _x000B_ vertical tab) into clean text.
+
+    Iterates so double-escaped sequences (_x005F_x000B_) also resolve, and
+    replaces any remaining control characters with spaces.
+    """
+    if "_x" not in text and not any(ch < " " and ch != "\n" for ch in text):
+        return text
+    def _decode(m: re.Match) -> str:
+        ch = chr(int(m.group(1), 16))
+        return ch if ch.isprintable() else " "
+    for _ in range(4):
+        new = _X_ESCAPE_RE.sub(_decode, text)
+        if new == text:
+            break
+        text = new
+    return "".join(ch if ch == "\n" or ch >= " " else " " for ch in text)
 
 
 @dataclass
@@ -193,15 +215,15 @@ def extract_deck(path: str, include_notes: bool = True) -> DeckContent:
 
             if shape.has_table:
                 tbl = shape.table
-                headers = [c.text.strip() for c in tbl.rows[0].cells]
-                rows = [[c.text.strip() for c in row.cells] for row in tbl.rows[1:]]
+                headers = [_sanitize_text(c.text.strip()) for c in tbl.rows[0].cells]
+                rows = [[_sanitize_text(c.text.strip()) for c in row.cells] for row in tbl.rows[1:]]
                 sc.blocks.append(TableBlock(counter.next(), None, headers, rows, bbox))
                 return
 
             if shape.has_text_frame and shape.text_frame.text.strip():
                 tf = shape.text_frame
                 for p in tf.paragraphs:
-                    txt = p.text.strip()
+                    txt = _sanitize_text(p.text.strip())
                     if not txt or _is_noise(txt):
                         continue
                     r = p.runs[0] if p.runs else None

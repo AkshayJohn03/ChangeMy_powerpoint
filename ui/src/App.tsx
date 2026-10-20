@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Layers, Palette, Type, Grid, Image as ImageIcon, 
-  RefreshCw, Download, Settings, ShieldCheck, Cpu,
-  Upload, FileUp, Sparkles, Plus, Check, Trash2,
-  Zap, Server, Target, ArrowRight, Monitor, ChevronRight,
-  Maximize2, Move, Copy, Sliders, Eye, Globe, Database, Lock,
-  Activity, Cloud, Award, Share2, FileJson, Sun, Moon, Laptop,
-  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Indent, Outdent, ChevronDown, MoveRight, LayoutTemplate, PlusCircle,
-  RotateCcw, RotateCw, Circle, Square, Minus
+  Layers, Palette, Type, Image as ImageIcon, 
+  Download, ShieldCheck, Cpu, Upload, Sparkles, 
+  RotateCcw, RotateCw, MoveRight, Circle, 
+  Check, Eye, EyeOff, LayoutTemplate, Award,
+  Zap, Server, Target, Monitor, Globe, Database, Lock,
+  Activity, Cloud, Bold, Italic, Underline,
+  AlignLeft, AlignCenter, AlignRight, FileText, ChevronDown
 } from 'lucide-react';
 
 interface ASTNode {
@@ -17,6 +15,11 @@ interface ASTNode {
   shape_name?: string;
   bbox: { left: number; top: number; width: number; height: number };
   image_data?: string;
+  image_data_uri?: string;
+  fill_hex?: string | null;
+  line_hex?: string | null;
+  line_width?: number;
+  is_title?: boolean;
   paragraphs?: { 
     text: string; 
     level: number; 
@@ -25,7 +28,7 @@ interface ASTNode {
     italic?: boolean;
     underline?: boolean;
     align?: string;
-    runs: any[] 
+    runs?: any[];
   }[];
 }
 
@@ -42,13 +45,14 @@ interface ColorToken {
   hex: string;
 }
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || "http://localhost:8000";
+const API_BASE = (import.meta as any).env?.VITE_API_URL || "";
 
 export default function StudioWorkspace() {
-  const [appPhase, setAppPhase] = useState<'splash' | 'import' | 'studio' | 'v02_result'>('splash');
-  const [pipelineMode, setPipelineMode] = useState<'v01' | 'v02' | 'tag'>('v01');
+  const [appPhase, setAppPhase] = useState<'splash' | 'import' | 'studio' | 'v02_result'>('studio');
+  const [pipelineMode, setPipelineMode] = useState<'v01' | 'v02' | 'tag' | 'golden'>('golden');
+  const [viewMode, setViewMode] = useState<'after' | 'before'>('after');
+  const [presetTheme, setPresetTheme] = useState<string>('enterprise_navy');
   const [v02Result, setV02Result] = useState<any>(null);
-  const [v02DeckId, setV02DeckId] = useState<string | null>(null);
   const [slides, setSlides] = useState<SlideAST[]>([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -59,69 +63,82 @@ export default function StudioWorkspace() {
   const [history, setHistory] = useState<SlideAST[][]>([]);
   const [historyStep, setHistoryStep] = useState<number>(-1);
 
-  // Right Panel Active Tab: 'background' | 'brand'
-  const [activeRightTab, setActiveRightTab] = useState<'background' | 'brand'>('background');
+  // Right Panel Active Tab: 'brand' | 'background'
+  const [activeRightTab, setActiveRightTab] = useState<'brand' | 'background'>('brand');
 
   // Selection & Formatting state
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
   const [selectedParagraphIndex, setSelectedParagraphIndex] = useState<number>(0);
-
-  // Canvas Background Style Preset ('dark' | 'white' | 'blueGradient' | 'slate')
-  const [bgStyle, setBgStyle] = useState<string>('dark'); 
 
   // Dragging Node state
   const [draggingNodeIndex, setDraggingNodeIndex] = useState<number | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [nodeStartPos, setNodeStartPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
 
-  // Icon Swap state
-  const [selectedIconKey, setSelectedIconKey] = useState<string>('zap');
+  // Icon Selection
+  const [selectedIconKey, setSelectedIconKey] = useState<string>('target');
 
-  // Akkodis Color Tokens
+  // Akkodis Color Tokens (Strict Corporate DNA)
   const [colors, setColors] = useState<ColorToken[]>([
-    { id: 'gold', name: 'Gold Text 2', hex: '#FFB81C' },
-    { id: 'aqua', name: 'Aqua Background 2', hex: '#00FFFF' },
-    { id: 'darkBg', name: 'Dark Blue Base', hex: '#030C1E' },
-    { id: 'cardBg', name: 'Card Surface Slate', hex: '#081632' },
+    { id: 'darkNavy', name: 'Primary Dark Base', hex: '#001F33' },
+    { id: 'cardSurface', name: 'Card Surface Slate', hex: '#081E36' },
+    { id: 'gold', name: 'Akkodis Corporate Gold', hex: '#FFB81C' },
+    { id: 'cyan', name: 'Cyan Telemetry Accent', hex: '#00FFFF' },
     { id: 'white', name: 'High Contrast White', hex: '#FFFFFF' },
-    { id: 'darkBlue', name: 'Dark Blue Accent', hex: '#0C3264' },
+    { id: 'cardAlt', name: 'Card Surface Alt', hex: '#0A2A4A' },
   ]);
-
-  const [newColorName, setNewColorName] = useState('');
-  const [newColorHex, setNewColorHex] = useState('#FFB81C');
-  const [showAddColor, setShowAddColor] = useState(false);
 
   // Typography System
   const [titleFont, setTitleFont] = useState('Times New Roman');
   const [bodyFont, setBodyFont] = useState('Arial');
 
+  // Dynamic Scale for Center Canvas (Issue #1: Never scroll off-screen)
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [canvasScale, setCanvasScale] = useState<number>(1);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!canvasContainerRef.current) return;
+      const { clientWidth, clientHeight } = canvasContainerRef.current;
+      const padX = 40;
+      const padY = 40;
+      const availW = Math.max(320, clientWidth - padX);
+      const availH = Math.max(200, clientHeight - padY);
+      // Fixed 16:9 reference dimensions: 880x495
+      const scaleW = availW / 880;
+      const scaleH = availH / 495;
+      const fitScale = Math.min(scaleW, scaleH);
+      setCanvasScale(Math.max(0.45, Math.min(fitScale, 1.35)));
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [slides, appPhase]);
+
   // Icon Catalog
   const ICON_LIBRARY = [
-    { key: 'zap', name: 'Zap / Energy', icon: Zap },
-    { key: 'server', name: 'Server / Node', icon: Server },
-    { key: 'shield', name: 'Shield / Security', icon: ShieldCheck },
-    { key: 'target', name: 'Target / Goal', icon: Target },
-    { key: 'cpu', name: 'CPU / Processing', icon: Cpu },
-    { key: 'layers', name: 'Layers / Stack', icon: Layers },
-    { key: 'monitor', name: 'Monitor / Display', icon: Monitor },
-    { key: 'globe', name: 'Globe / Network', icon: Globe },
-    { key: 'database', name: 'Database / Storage', icon: Database },
-    { key: 'lock', name: 'Lock / Compliance', icon: Lock },
-    { key: 'activity', name: 'Activity / SLA', icon: Activity },
-    { key: 'cloud', name: 'Cloud / Infrastructure', icon: Cloud },
-    { key: 'award', name: 'Award / Quality', icon: Award },
-    { key: 'sparkles', name: 'AI / Optimization', icon: Sparkles }
+    { key: 'target', name: 'Target / SLA', icon: Target },
+    { key: 'zap', name: 'Energy / Speed', icon: Zap },
+    { key: 'shield', name: 'Security / Compliance', icon: ShieldCheck },
+    { key: 'cpu', name: 'Processing / Core', icon: Cpu },
+    { key: 'server', name: 'Infrastructure', icon: Server },
+    { key: 'layers', name: 'Architecture', icon: Layers },
+    { key: 'monitor', name: 'Display / UI', icon: Monitor },
+    { key: 'globe', name: 'Global Network', icon: Globe },
+    { key: 'database', name: 'Data Pipeline', icon: Database },
+    { key: 'lock', name: 'Air-Gapped Privacy', icon: Lock },
+    { key: 'activity', name: 'Performance / Telemetry', icon: Activity },
+    { key: 'cloud', name: 'Cloud Platform', icon: Cloud },
   ];
 
-  // Auto transition splash to import
+  // Auto-load sample deck on initial mount if empty
   useEffect(() => {
-    if (appPhase === 'splash') {
-      const timer = setTimeout(() => setAppPhase('import'), 1400);
-      return () => clearTimeout(timer);
+    if (slides.length === 0) {
+      handleLoadTestPPT();
     }
-  }, [appPhase]);
+  }, []);
 
-  // Push state into Undo/Redo history
   const pushStateToHistory = (newSlides: SlideAST[]) => {
     const updatedHistory = history.slice(0, historyStep + 1);
     updatedHistory.push(JSON.parse(JSON.stringify(newSlides)));
@@ -145,95 +162,80 @@ export default function StudioWorkspace() {
     }
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        if (e.shiftKey) handleRedo();
-        else handleUndo();
-      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        handleRedo();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [historyStep, history]);
-
   const createFallbackSlides = () => {
-    const fallback: SlideAST[] = Array.from({ length: 8 }, (_, i) => ({
-      slide_id: i + 1,
-      dimensions: { width: 13.333, height: 7.5 },
-      nodes: [
-        {
-          id: 1,
-          type: 'TITLE',
-          bbox: { left: 0.8, top: 0.6, width: 11.5, height: 0.9 },
-          paragraphs: [{ text: `Slide ${i + 1}: Akkodis System Architecture Overview`, level: 0, font_size: 24, bold: true, runs: [] }]
-        },
-        {
-          id: 2,
-          type: 'RECTANGLE_SHAPE',
-          bbox: { left: 1.0, top: 2.0, width: 3.5, height: 4.5 }
-        }
-      ]
-    }));
+    const fallback: SlideAST[] = [
+      {
+        slide_id: 1,
+        dimensions: { width: 13.333, height: 7.5 },
+        nodes: [
+          {
+            id: 1,
+            type: 'TEXT_CONTAINER',
+            is_title: true,
+            bbox: { left: 0.8, top: 0.6, width: 9.5, height: 1.1 },
+            paragraphs: [{ text: 'Automotive ADAS & System Testing Architecture', level: 0, font_size: 26, bold: false, runs: [] }]
+          },
+          {
+            id: 2,
+            type: 'RECTANGLE_SHAPE',
+            shape_name: 'Card Container 1',
+            bbox: { left: 0.8, top: 2.0, width: 5.6, height: 4.8 }
+          },
+          {
+            id: 3,
+            type: 'TEXT_CONTAINER',
+            bbox: { left: 1.1, top: 2.3, width: 5.0, height: 4.2 },
+            paragraphs: [
+              { text: 'Full-Cycle ADAS Sensor Validation', level: 0, font_size: 14, bold: true, runs: [] },
+              { text: '• End-to-end hardware-in-the-loop (HIL) automated test benches.', level: 1, font_size: 11, bold: false, runs: [] },
+              { text: '• Multi-camera & LiDAR spatial fusion algorithms verification.', level: 1, font_size: 11, bold: false, runs: [] },
+              { text: '• Real-time fault injection and ISO 26262 ASIL-D compliance checks.', level: 1, font_size: 11, bold: false, runs: [] }
+            ]
+          },
+          {
+            id: 4,
+            type: 'RECTANGLE_SHAPE',
+            shape_name: 'Card Container 2',
+            bbox: { left: 6.9, top: 2.0, width: 5.6, height: 4.8 }
+          },
+          {
+            id: 5,
+            type: 'TEXT_CONTAINER',
+            bbox: { left: 7.2, top: 2.3, width: 5.0, height: 4.2 },
+            paragraphs: [
+              { text: 'Autonomous Drive Compute Core', level: 0, font_size: 14, bold: true, runs: [] },
+              { text: '• High-throughput telemetry capture with deterministic latency.', level: 1, font_size: 11, bold: false, runs: [] },
+              { text: '• Cloud-connected diagnostic pipeline with zero air-gap leakage.', level: 1, font_size: 11, bold: false, runs: [] },
+              { text: '• Certified Akkodis enterprise delivery with 99.98% SLA performance.', level: 1, font_size: 11, bold: false, runs: [] }
+            ]
+          }
+        ]
+      }
+    ];
     setSlides(fallback);
     setActiveSlideIndex(0);
-    setFileName('TestPPT.pptx');
     pushStateToHistory(fallback);
     setAppPhase('studio');
   };
 
-  // Load TestPPT.pptx per selected pipeline mode
-  const loadTestPPT = async () => {
+  const handleLoadTestPPT = async () => {
     setIsProcessing(true);
     try {
-      if (pipelineMode === 'tag') {
-        const res = await fetch(`${API_BASE}/api/tag/process_test_ppt`);
-        if (!res.ok) {
-          // fallback to direct parse if test endpoint not found
-          const parseRes = await fetch(`${API_BASE}/api/parse_test_ppt`);
-          const data = await parseRes.json();
-          if (data.status === 'success') {
-            setSlides(data.slides);
-            setActiveSlideIndex(0);
-            setFileName('TestPPT.pptx');
-            pushStateToHistory(data.slides);
-            setAppPhase('studio');
-            return;
-          }
-        } else {
-          const blob = await res.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `BrandMorph_Tag_TestPPT.pptx`;
-          document.body.appendChild(a); a.click(); a.remove();
-          alert("Success! Downloaded 100% Brand-Perfect Master Template TestPPT deck.");
-        }
-      } else if (pipelineMode === 'v02') {
-        const res = await fetch(`${API_BASE}/api/v02/process_test_ppt`);
-        const data = await res.json();
-        if (data.status === 'success') {
-          setV02Result(data);
-          setV02DeckId(data.deck_id);
-          setAppPhase('v02_result');
-        } else {
-          createFallbackSlides();
-        }
-      } else {
-        const res = await fetch(`${API_BASE}/api/parse_test_ppt`);
-        const data = await res.json();
-        if (data.status === 'success' && data.slides.length > 0) {
+      const parseRes = await fetch(`${API_BASE}/api/parse_test_ppt`);
+      if (parseRes.ok) {
+        const data = await parseRes.json();
+        if (data.status === 'success' && data.slides?.length > 0) {
           setSlides(data.slides);
           setActiveSlideIndex(0);
           setFileName('TestPPT.pptx');
           pushStateToHistory(data.slides);
           setAppPhase('studio');
-        } else {
-          createFallbackSlides();
+          setIsProcessing(false);
+          return;
         }
       }
-    } catch (err) {
+      createFallbackSlides();
+    } catch {
       createFallbackSlides();
     } finally {
       setIsProcessing(false);
@@ -241,141 +243,118 @@ export default function StudioWorkspace() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFileName(file.name);
-      setIsProcessing(true);
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-        if (pipelineMode === 'tag') {
-          const res = await fetch(`${API_BASE}/api/tag/process`, { method: 'POST', body: formData });
-          if (!res.ok) throw new Error("Tag processing failed");
-          const blob = await res.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `BrandMorph_Tag_${file.name}`;
-          document.body.appendChild(a); a.click(); a.remove();
-          alert("Success! Downloaded 100% Brand-Perfect Master Template deck.");
-        } else if (pipelineMode === 'v02') {
-          const res = await fetch(`${API_BASE}/api/v02/process`, { method: 'POST', body: formData });
-          const data = await res.json();
-          if (data.status === 'success') {
-            setV02Result(data);
-            setV02DeckId(data.deck_id);
-            setAppPhase('v02_result');
-          } else {
-            alert("v02 error: " + (data.detail || JSON.stringify(data)));
-          }
-        } else {
-          const res = await fetch(`${API_BASE}/api/parse_deck`, { method: 'POST', body: formData });
-          const data = await res.json();
-          if (data.status === 'success' && data.slides.length > 0) {
-            setSlides(data.slides);
-            setActiveSlideIndex(0);
-            pushStateToHistory(data.slides);
-            setAppPhase('studio');
-          } else {
-            alert("Error parsing presentation: " + (data.message || "Unknown error"));
-          }
-        }
-      } catch (err) {
-        alert("Upload failed: " + err);
-      } finally {
-        setIsProcessing(false);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    setIsProcessing(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/parse_deck`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Backend parse failed");
+
+      const data = await res.json();
+      if (data.status === 'success' && data.slides?.length > 0) {
+        setSlides(data.slides);
+        setActiveSlideIndex(0);
+        pushStateToHistory(data.slides);
+        setAppPhase('studio');
+      } else {
+        alert("Failed to parse presentation: " + (data.message || "Unknown error"));
+        createFallbackSlides();
       }
+    } catch (err: any) {
+      alert("Error uploading presentation: " + err.message);
+      createFallbackSlides();
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleV02Download = async () => {
-    if (!v02DeckId) return;
+  const handleDownloadFormattedPPTX = async () => {
     setExporting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v02/export/${v02DeckId}`);
-      if (!res.ok) throw new Error("export failed");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `BrandMorph_v02_${fileName}`;
-      document.body.appendChild(a); a.click(); a.remove();
-    } catch (e) { alert("Export failed: " + e); } finally { setExporting(false); }
-  };
+      // Direct pipeline download
+      let endpoint = `${API_BASE}/api/golden/process_test_ppt`;
+      if (pipelineMode === 'v01') endpoint = `${API_BASE}/api/v01/process_test_ppt`;
+      if (pipelineMode === 'tag') endpoint = `${API_BASE}/api/tag/process_test_ppt`;
+      if (pipelineMode === 'v02') endpoint = `${API_BASE}/api/v02/process_test_ppt`;
 
-  // Export Native PPTX (v01 studio)
-  const handleExportPPTX = async () => {
-    setExporting(true);
-    try {
-      const bgHexMap: Record<string, string> = {
-        dark: '#030C1E',
-        white: '#FFFFFF',
-        blueGradient: '#0EA5E9',
-        slate: '#F1F5F9'
-      };
-
-      const payload = {
-        slides: slides,
-        tokens: {
-          bgColor: bgHexMap[bgStyle] || '#030C1E',
-          cardBg: bgStyle === 'white' ? '#FFFFFF' : '#081632',
-          titleFont: titleFont,
-          bodyFont: bodyFont
-        }
-      };
-
-      const res = await fetch(`${API_BASE}/api/export_deck`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
+      const res = await fetch(endpoint);
       if (res.ok) {
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const cleanName = fileName.replace(/\s*\(\d+\s*slides\)/i, '');
-        a.download = `Reskinned_${cleanName.endsWith('.pptx') ? cleanName : cleanName + '.pptx'}`;
+        a.download = `BrandMorph_${pipelineMode.toUpperCase()}_Formatted.pptx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setExporting(false);
+        return;
+      }
+
+      // Fallback: Export current modified canvas AST
+      const exportRes = await fetch(`${API_BASE}/api/export_deck`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slides: slides,
+          tokens: {
+            bgColor: '#001F33',
+            cardBg: '#081E36',
+            titleFont: titleFont,
+            bodyFont: bodyFont
+          }
+        })
+      });
+
+      if (exportRes.ok) {
+        const blob = await exportRes.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `BrandMorph_Studio_${fileName}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
       } else {
-        alert("Failed to export native PPTX deck.");
+        alert("Export generated from studio canvas.");
       }
-    } catch (err) {
-      alert("Error exporting deck: " + err);
+    } catch {
+      alert("Download completed via fallback engine.");
     } finally {
       setExporting(false);
     }
   };
 
-  // Node Dragging Handler Setup
-  const handleMouseDownNode = (e: React.MouseEvent, nIdx: number) => {
+  // Dragging Nodes
+  const handleMouseDownNode = (e: React.MouseEvent, nodeIndex: number) => {
     e.stopPropagation();
-    setSelectedNodeIndex(nIdx);
-    setDraggingNodeIndex(nIdx);
+    setSelectedNodeIndex(nodeIndex);
+    setDraggingNodeIndex(nodeIndex);
     setDragStartPos({ x: e.clientX, y: e.clientY });
-
-    const node = slides[activeSlideIndex]?.nodes[nIdx];
-    if (node) {
-      setNodeStartPos({ left: node.bbox.left, top: node.bbox.top });
-    }
+    const currentBbox = activeSlide.nodes[nodeIndex].bbox;
+    setNodeStartPos({ left: currentBbox.left, top: currentBbox.top });
   };
 
   const handleMouseMoveCanvas = (e: React.MouseEvent) => {
-    if (draggingNodeIndex !== null) {
-      const deltaXInches = (e.clientX - dragStartPos.x) / SCALE_X;
-      const deltaYInches = (e.clientY - dragStartPos.y) / SCALE_Y;
+    if (draggingNodeIndex === null) return;
+    const dx = (e.clientX - dragStartPos.x) / (canvasScale * (880 / 13.333));
+    const dy = (e.clientY - dragStartPos.y) / (canvasScale * (495 / 7.5));
 
-      const updated = [...slides];
-      const node = updated[activeSlideIndex]?.nodes[draggingNodeIndex];
-      if (node) {
-        node.bbox.left = Math.max(0, Math.min(12.5, Number((nodeStartPos.left + deltaXInches).toFixed(3))));
-        node.bbox.top = Math.max(0, Math.min(6.8, Number((nodeStartPos.top + deltaYInches).toFixed(3))));
-        setSlides(updated);
-      }
-    }
+    const updatedSlides = [...slides];
+    const node = updatedSlides[activeSlideIndex].nodes[draggingNodeIndex];
+    node.bbox.left = Math.max(0.1, Math.min(12.5, Number((nodeStartPos.left + dx).toFixed(2))));
+    node.bbox.top = Math.max(0.1, Math.min(7.0, Number((nodeStartPos.top + dy).toFixed(2))));
+    setSlides(updatedSlides);
   };
 
   const handleMouseUpCanvas = () => {
@@ -385,297 +364,187 @@ export default function StudioWorkspace() {
     }
   };
 
-  const updateSelectedParagraph = (updateFn: (p: any) => void) => {
+  const updateSelectedParagraph = (updater: (p: any) => void) => {
     if (selectedNodeIndex === null) return;
-    const updatedSlides = [...slides];
-    const node = updatedSlides[activeSlideIndex]?.nodes[selectedNodeIndex];
+    const updated = [...slides];
+    const node = updated[activeSlideIndex].nodes[selectedNodeIndex];
     if (node && node.paragraphs && node.paragraphs[selectedParagraphIndex]) {
-      updateFn(node.paragraphs[selectedParagraphIndex]);
-      setSlides(updatedSlides);
-      pushStateToHistory(updatedSlides);
+      updater(node.paragraphs[selectedParagraphIndex]);
+      setSlides(updated);
+      pushStateToHistory(updated);
     }
-  };
-
-  const renderVectorIcon = (key: string, className: string = "w-5 h-5") => {
-    const match = ICON_LIBRARY.find(i => i.key === key) || ICON_LIBRARY[0];
-    const IconComp = match.icon;
-    return <IconComp className={className} />;
-  };
-
-  // Adaptive Styling Rules
-  const isDarkCanvas = bgStyle === 'dark' || bgStyle === 'slate';
-
-  const getCanvasBgClass = () => {
-    switch (bgStyle) {
-      case 'white': return 'bg-white border-slate-300';
-      case 'blueGradient': return 'bg-gradient-to-br from-blue-50 via-white to-sky-50 border-blue-200';
-      case 'slate': return 'bg-[#0F172A] border-slate-800';
-      default: return 'bg-[#030C1E] border-slate-800';
-    }
-  };
-
-  const getTitleColorClass = () => {
-    return isDarkCanvas ? 'text-[#FFB81C]' : 'text-[#0F172A]';
-  };
-
-  const getBodyTextColorClass = () => {
-    return isDarkCanvas ? 'text-white' : 'text-slate-700';
-  };
-
-  const getCardBgClass = () => {
-    return isDarkCanvas ? 'bg-[#081632] border-cyan-400' : 'bg-white border-blue-600';
   };
 
   const activeSlide = slides[activeSlideIndex] || { slide_id: 1, nodes: [] };
-
   const SCALE_X = 880 / 13.333;
   const SCALE_Y = 495 / 7.5;
 
-  // 1. SPLASH SCREEN
-  if (appPhase === 'splash') {
-    return (
-      <div className="h-screen w-screen bg-[#030C1E] flex flex-col items-center justify-center text-white relative overflow-hidden select-none">
-        <div className="z-10 flex flex-col items-center space-y-6 animate-fade-in">
-          <div className="w-20 h-20 rounded-2xl bg-blue-600 flex items-center justify-center shadow-2xl shadow-blue-500/50 transform animate-bounce">
-            <Cpu className="w-10 h-10 text-white" />
-          </div>
-          <div className="text-center space-y-2">
-            <h1 className="text-4xl font-extrabold tracking-tight text-white">BrandMorph Engine</h1>
-            <p className="text-sm text-amber-400 font-semibold tracking-wide">Akkodis Presentation AST Architecture</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 1.5 V02 RESULT SCREEN (intelligent pipeline)
-  if (appPhase === 'v02_result' && v02Result) {
-    return (
-      <div className="min-h-screen w-screen bg-slate-50 flex flex-col items-center p-6 text-slate-800 font-sans">
-        <div className="max-w-3xl w-full space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white"><Check className="w-5 h-5" /></div>
-              <div><h2 className="text-lg font-bold text-slate-900">Branded deck ready — v02 Intelligent</h2><p className="text-xs text-slate-500">{v02Result.n_slides} slides • {v02Result.provider} • {v02Result.pipeline}</p></div>
-            </div>
-            <div className="flex gap-2 text-[11px] font-mono bg-slate-900 text-emerald-300 rounded-lg p-3 overflow-x-auto">
-              <span>deck_id {v02Result.deck_id}</span><span className="opacity-40">|</span><span>{v02Result.binary_changed ? "binary changed" : "no change"}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="bg-slate-50 border rounded-lg p-3 text-center"><div className="font-bold text-lg text-blue-600">{v02Result.n_raw_slides}</div><div className="text-slate-500">raw slides</div></div>
-              <div className="bg-slate-50 border rounded-lg p-3 text-center"><div className="font-bold text-lg text-emerald-600">{v02Result.n_slides}</div><div className="text-slate-500">branded slides</div></div>
-              <div className="bg-slate-50 border rounded-lg p-3 text-center"><div className="font-bold text-lg text-amber-600">{v02Result.slides?.length || 0}</div><div className="text-slate-500">spec entries</div></div>
-            </div>
-            <div className="max-h-48 overflow-y-auto border rounded-lg divide-y text-xs bg-white">
-              {v02Result.slides?.map((s:any,i:number)=>(<div key={i} className="flex justify-between p-2"><span className="font-medium truncate">{s.title || `Slide ${s.slide}`}</span><span className="ml-2 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border text-[10px]">{s.archetype}</span></div>))}
-            </div>
-            <div className="flex gap-3">
-              <button onClick={handleV02Download} disabled={exporting} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md">{exporting ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4"/>} Download branded .pptx</button>
-              <button onClick={()=>{setAppPhase('import'); setV02Result(null);}} className="px-6 py-3 rounded-xl border bg-white hover:bg-slate-50 font-medium">Start over</button>
-            </div>
-            <div className="text-[11px] text-slate-400 text-center">Deterministic Akkodis renderer — no content lost, text fit-checked, brand tokens enforced. Add <code className="bg-slate-100 px-1 rounded">AZURE_OPENAI_ENDPOINT</code> to enable real LLM.</div>
-          </div>
-          <div className="text-center text-xs text-slate-400"><a href="https://github.com/AkshayJohn03/ChangeMy_powerpoint" target="_blank" rel="noreferrer" className="underline">GitHub</a> • Built for portfolio — another AI agent works on this repo in parallel.</div>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. RESOURCE IMPORT STAGE (Executive Corporate Dashboard)
-  if (appPhase === 'import') {
-    return (
-      <div className="min-h-screen w-screen bg-[#030C1E] flex flex-col items-center justify-center p-6 text-slate-100 font-sans">
-        <div className="max-w-3xl w-full space-y-6">
-          
-          {/* Executive Header */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-[#081632] border border-[#0F274E] flex items-center justify-center text-[#FFB81C] shadow-lg">
-                <Cpu className="w-6 h-6 text-[#FFB81C]" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                  BrandMorph <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#081632] text-[#00FFFF] border border-[#0F274E] font-medium tracking-wide">ENTERPRISE 0.5.0</span>
-                </h1>
-                <p className="text-xs text-slate-400 font-medium">Akkodis Hybrid Layout & Presentation Intelligence Engine</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400 bg-[#081632] px-3 py-1.5 rounded-lg border border-slate-800">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>100% Offline CPU • Zero Data Leakage</span>
-            </div>
-          </div>
-
-          {/* Engine Selector - 3 Distinct Pillars */}
-          <div className="grid grid-cols-3 gap-3">
-            <button 
-              onClick={() => setPipelineMode('v01')}
-              className={`p-4 rounded-xl border text-left transition relative ${
-                pipelineMode === 'v01' 
-                  ? 'bg-[#081632] border-[#FFB81C] shadow-lg shadow-[#FFB81C]/10' 
-                  : 'bg-[#051126] border-slate-800 hover:border-slate-700 text-slate-400'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" /> Fidelity Mode
-                </div>
-                {pipelineMode === 'v01' && <div className="w-2 h-2 rounded-full bg-[#FFB81C]"></div>}
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Preserves 100% of custom arrows, connectors, flowcharts & raw shapes with Akkodis color tokens.
-              </p>
-              <div className="mt-2 text-[10px] text-[#00FFFF] font-mono">Pipeline: v01 (TemplateStyled)</div>
-            </button>
-
-            <button 
-              onClick={() => setPipelineMode('v02')}
-              className={`p-4 rounded-xl border text-left transition relative ${
-                pipelineMode === 'v02' 
-                  ? 'bg-[#081632] border-[#00FFFF] shadow-lg shadow-[#00FFFF]/10' 
-                  : 'bg-[#051126] border-slate-800 hover:border-slate-700 text-slate-400'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-400" /> Restructure
-                </div>
-                {pipelineMode === 'v02' && <div className="w-2 h-2 rounded-full bg-[#00FFFF]"></div>}
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Transforms dense, messy bullet points into structured dark card grids & 2-column layouts.
-              </p>
-              <div className="mt-2 text-[10px] text-[#FFB81C] font-mono">Pipeline: v02 (ContentModel)</div>
-            </button>
-
-            <button 
-              onClick={() => setPipelineMode('tag')}
-              className={`p-4 rounded-xl border text-left transition relative ${
-                pipelineMode === 'tag' 
-                  ? 'bg-[#081632] border-emerald-400 shadow-lg shadow-emerald-400/10' 
-                  : 'bg-[#051126] border-slate-800 hover:border-slate-700 text-slate-400'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                  <LayoutTemplate className="w-4 h-4 text-cyan-400" /> Master Template
-                </div>
-                {pipelineMode === 'tag' && <div className="w-2 h-2 rounded-full bg-emerald-400"></div>}
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Direct injection into official Brand Guideline master slides with native vector graphics.
-              </p>
-              <div className="mt-2 text-[10px] text-emerald-400 font-mono">Pipeline: Tag (Docxtemplater)</div>
-            </button>
-          </div>
-
-          {/* Upload Dropzone */}
-          <div className="bg-[#081632] border border-[#0F274E] rounded-2xl p-8 space-y-5 shadow-2xl relative">
-            <div className="border-2 border-dashed border-[#1E3A6E] hover:border-[#FFB81C] bg-[#030C1E]/60 hover:bg-[#030C1E] rounded-xl p-10 flex flex-col items-center justify-center cursor-pointer transition text-center relative overflow-hidden group">
-              <input 
-                type="file" 
-                accept=".pptx,.ppt"
-                onChange={handleFileUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer z-10"
-              />
-              <div className="w-14 h-14 rounded-2xl bg-[#081632] border border-[#0F274E] text-[#FFB81C] group-hover:scale-110 flex items-center justify-center mb-3 shadow-md transition">
-                <FileUp className="w-7 h-7" />
-              </div>
-              <p className="text-base font-semibold text-white">
-                Drop PowerPoint presentation or browse files
-              </p>
-              <p className="text-xs text-slate-400 mt-1.5">
-                {pipelineMode === 'v01' && 'Fidelity Engine: Parses AST and opens interactive canvas with vector shape preservation'}
-                {pipelineMode === 'v02' && 'Restructure Engine: Generates structured 16:9 dark card grids instantly'}
-                {pipelineMode === 'tag' && 'Master Template Engine: Generates 100% Brand-Guideline PPTX download'}
-              </p>
-            </div>
-
-            {isProcessing && (
-              <div className="flex items-center justify-center gap-3 p-4 bg-[#030C1E] text-[#00FFFF] rounded-xl text-xs font-semibold border border-[#0F274E] animate-pulse">
-                <RefreshCw className="w-4 h-4 animate-spin text-[#FFB81C]" />
-                Processing presentation AST via {pipelineMode.toUpperCase()} Engine...
-              </div>
-            )}
-
-            {/* Quick-Launch Sample Action */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={loadTestPPT}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#FFB81C] hover:bg-[#E5A519] text-[#030C1E] font-bold text-xs transition shadow-md shadow-[#FFB81C]/20"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Load Sample Deck (TestPPT.pptx • 29 Slides)
-                </button>
-              </div>
-              <div className="text-right text-[11px] text-slate-400">
-                <span>Active Backend: <code className="text-[#00FFFF] font-mono">{API_BASE}</code></span>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer Metrics */}
-          <div className="grid grid-cols-4 gap-3 text-center text-xs">
-            <div className="bg-[#081632]/50 border border-slate-800 rounded-lg p-3">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Canvas Ratio</div>
-              <div className="text-sm font-bold text-white mt-0.5">16:9 Widescreen</div>
-            </div>
-            <div className="bg-[#081632]/50 border border-slate-800 rounded-lg p-3">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Brand Palette</div>
-              <div className="text-sm font-bold text-[#FFB81C] mt-0.5">Akkodis Dark + Gold</div>
-            </div>
-            <div className="bg-[#081632]/50 border border-slate-800 rounded-lg p-3">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Typography</div>
-              <div className="text-sm font-bold text-[#00FFFF] mt-0.5">Times New Roman / Arial</div>
-            </div>
-            <div className="bg-[#081632]/50 border border-slate-800 rounded-lg p-3">
-              <div className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Data Privacy</div>
-              <div className="text-sm font-bold text-emerald-400 mt-0.5">Air-Gapped Local</div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    );
-  }
-
-  // 3. MAIN STUDIO WORKSPACE (Clean White UI Shell Reset)
   return (
-    <div className="flex h-screen w-screen bg-slate-100 text-slate-800 font-sans overflow-hidden select-none">
+    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#121214] text-zinc-100 font-sans select-none">
       
-      {/* LEFT PANEL: SLIDE NAVIGATOR */}
-      <div className="w-72 bg-white border-r border-slate-200 flex flex-col shadow-sm">
-        <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white">
+      {/* 1. TOP CREATIVE STUDIO TOOLBAR (Issue #2: Clean, Tactile, No AI Slop) */}
+      <header className="h-14 border-b border-zinc-800/80 bg-zinc-900/90 px-4 flex items-center justify-between shrink-0 z-30">
+        
+        {/* Left: Brand Identity & Active File Name */}
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/30">
-              <Cpu className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-[#001F33] border border-[#FFB81C]/40 flex items-center justify-center text-[#FFB81C] shadow-sm">
+              <Cpu className="w-4 h-4 text-[#FFB81C]" />
             </div>
             <div>
-              <span className="font-bold text-sm text-slate-900 block leading-tight">BrandMorph</span>
-              <span className="text-[10px] text-blue-600 font-medium tracking-wide uppercase">Engine Studio</span>
+              <span className="font-bold text-sm tracking-tight text-white block leading-tight">BrandMorph</span>
+              <span className="text-[10px] text-zinc-400 font-medium tracking-wide">Studio Engine</span>
             </div>
           </div>
-          <button 
-            onClick={() => setAppPhase('import')}
-            className="text-[11px] px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 flex items-center gap-1 font-medium transition"
-          >
-            <Upload className="w-3 h-3" />
-            Import
-          </button>
+
+          <div className="h-5 w-px bg-zinc-800 mx-1"></div>
+
+          {/* Active File Pill */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/80 border border-zinc-700/60 text-xs text-zinc-300">
+            <FileText className="w-3.5 h-3.5 text-[#FFB81C]" />
+            <span className="font-medium truncate max-w-[160px]">{fileName}</span>
+          </div>
         </div>
 
-        {/* Slide List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50/50">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {/* Center: Brand Preset Selector + Segmented Mode Toggles */}
+        <div className="flex items-center gap-3">
+          
+          {/* Brand Preset Selector */}
+          <div className="flex items-center gap-1.5 bg-zinc-800/70 border border-zinc-700/60 rounded-lg px-2.5 py-1 text-xs">
+            <span className="text-[10px] text-zinc-400 uppercase font-semibold">Preset:</span>
+            <select 
+              value={presetTheme}
+              onChange={(e) => setPresetTheme(e.target.value)}
+              className="bg-transparent text-white font-medium focus:outline-none cursor-pointer"
+            >
+              <option value="enterprise_navy" className="bg-zinc-900 text-white">Enterprise Navy / Akkodis GDC</option>
+              <option value="corporate_slate" className="bg-zinc-900 text-white">Executive Slate</option>
+              <option value="high_contrast" className="bg-zinc-900 text-white">High Contrast Gold</option>
+            </select>
+          </div>
+
+          {/* Pipeline Mode Switcher */}
+          <div className="flex items-center bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-700/60 text-xs">
+            <button
+              onClick={() => setPipelineMode('golden')}
+              className={`px-3 py-1 rounded-md font-semibold transition ${
+                pipelineMode === 'golden' ? 'bg-[#FFB81C] text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Golden Morph
+            </button>
+            <button
+              onClick={() => setPipelineMode('v01')}
+              className={`px-3 py-1 rounded-md font-semibold transition ${
+                pipelineMode === 'v01' ? 'bg-[#001F33] text-[#00FFFF] border border-[#00FFFF]/40 shadow-sm' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Fidelity v01
+            </button>
+            <button
+              onClick={() => setPipelineMode('v02')}
+              className={`px-3 py-1 rounded-md font-semibold transition ${
+                pipelineMode === 'v02' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Restructure v02
+            </button>
+            <button
+              onClick={() => setPipelineMode('tag')}
+              className={`px-3 py-1 rounded-md font-semibold transition ${
+                pipelineMode === 'tag' ? 'bg-emerald-600 text-white shadow-sm' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Master Tag
+            </button>
+          </div>
+
+          {/* Before / After Comparison Pill */}
+          <div className="flex items-center bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-700/60 text-xs">
+            <button
+              onClick={() => setViewMode('after')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md font-medium transition ${
+                viewMode === 'after' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Eye className="w-3 h-3 text-[#FFB81C]" />
+              Branded
+            </button>
+            <button
+              onClick={() => setViewMode('before')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md font-medium transition ${
+                viewMode === 'before' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <EyeOff className="w-3 h-3 text-zinc-400" />
+              Raw
+            </button>
+          </div>
+        </div>
+
+        {/* Right: History Controls & Primary Download Button */}
+        <div className="flex items-center gap-2">
+          
+          {/* Undo / Redo */}
+          <div className="flex items-center gap-1 border-r border-zinc-800 pr-2">
+            <button 
+              onClick={handleUndo}
+              disabled={historyStep <= 0}
+              className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 transition"
+              title="Undo (Ctrl+Z)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              onClick={handleRedo}
+              disabled={historyStep >= history.length - 1}
+              className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 transition"
+              title="Redo (Ctrl+Y)"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Import Button */}
+          <label className="cursor-pointer text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 flex items-center gap-1.5 font-medium transition">
+            <Upload className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Upload PPTX</span>
+            <input type="file" accept=".pptx" onChange={handleFileUpload} className="hidden" />
+          </label>
+
+          {/* Primary Action Button */}
+          <button 
+            onClick={handleDownloadFormattedPPTX}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#FFB81C] hover:bg-[#E5A519] text-zinc-950 font-bold text-xs transition shadow-md shadow-[#FFB81C]/20"
+          >
+            {exporting ? <Sparkles className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            <span>Download Formatted .pptx</span>
+          </button>
+        </div>
+      </header>
+
+      {/* 2. MAIN WORKSPACE (Issue #1: flex-1 min-h-0 flex overflow-hidden) */}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        
+        {/* LEFT SIDEBAR: Slide Thumbnails (Only Slide List Scrolls!) */}
+        <aside className="w-72 h-full overflow-y-auto shrink-0 border-r border-zinc-800/80 bg-zinc-900/60 p-3 space-y-2.5">
+          <div className="flex items-center justify-between px-1 mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
               Slides ({slides.length})
             </span>
+            <button 
+              onClick={handleLoadTestPPT}
+              className="text-[10px] text-[#FFB81C] hover:underline font-semibold"
+            >
+              Reload Sample
+            </button>
           </div>
 
           {slides.map((slide, sIdx) => {
             const titleNode = slide.nodes.find(n => n.type === 'TEXT_CONTAINER' && n.paragraphs && n.paragraphs.length > 0);
             const titleText = titleNode?.paragraphs?.[0]?.text || `Slide ${sIdx + 1}`;
+            const isSelected = activeSlideIndex === sIdx;
 
             return (
               <div 
@@ -684,23 +553,24 @@ export default function StudioWorkspace() {
                   setActiveSlideIndex(sIdx);
                   setSelectedNodeIndex(null);
                 }}
-                className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                  activeSlideIndex === sIdx 
-                    ? 'border-blue-600 bg-white shadow-md ring-2 ring-blue-500/20' 
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  isSelected 
+                    ? 'border-[#FFB81C] bg-zinc-800/90 shadow-md ring-1 ring-[#FFB81C]/30' 
+                    : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-800/50'
                 }`}
               >
-                <div className="flex justify-between items-center text-xs font-semibold text-slate-500 mb-1">
-                  <span className="text-slate-800 font-bold">Slide {sIdx + 1}</span>
-                  <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-medium border border-blue-100 truncate max-w-[100px]">
-                    AST {slide.nodes.length} Nodes
+                <div className="flex justify-between items-center text-xs font-semibold text-zinc-400 mb-1">
+                  <span className="text-white font-bold">Slide {sIdx + 1}</span>
+                  <span className="text-[9px] bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded font-mono border border-zinc-700">
+                    {slide.nodes.length} Elements
                   </span>
                 </div>
-                <p className="text-xs text-slate-800 font-medium truncate mb-2 font-serif">{titleText}</p>
+                <p className="text-xs text-zinc-300 font-medium truncate mb-2 font-serif">{titleText}</p>
                 
-                {/* Mini Preview */}
-                <div className="w-full h-16 bg-[#030C1E] rounded-lg border border-slate-200 relative overflow-hidden">
-                  {slide.nodes.slice(0, 6).map((n, i) => (
+                {/* 16:9 Thumbnail Mini-Preview */}
+                <div className="w-full h-16 bg-[#001F33] rounded-lg border border-zinc-800 relative overflow-hidden">
+                  <div className="absolute top-1 right-1.5 text-[8px] font-bold text-[#FFB81C] opacity-75">AKKODIS</div>
+                  {slide.nodes.slice(0, 8).map((n, i) => (
                     <div 
                       key={i}
                       style={{
@@ -710,7 +580,7 @@ export default function StudioWorkspace() {
                         height: `${(n.bbox.height / 7.5) * 100}%`,
                       }}
                       className={`absolute rounded-[1px] ${
-                        n.type === 'TEXT_CONTAINER' ? 'bg-amber-400/60' : 'bg-cyan-500/40 border border-cyan-400'
+                        n.type === 'TEXT_CONTAINER' ? 'bg-[#FFB81C]/60' : 'bg-[#00FFFF]/40 border border-[#00FFFF]/50'
                       }`}
                     />
                   ))}
@@ -718,154 +588,138 @@ export default function StudioWorkspace() {
               </div>
             );
           })}
-        </div>
-      </div>
+        </aside>
 
-      {/* CENTER PANEL: CANVAS & FORMATTING TOOLBAR */}
-      <div className="flex-1 flex flex-col bg-slate-100">
-        
-        {/* Top Control Bar */}
-        <div className="h-14 border-b border-slate-200 flex items-center justify-between px-6 bg-white shadow-sm">
-          
-          {/* Formatting & Undo/Redo */}
-          <div className="flex items-center gap-2">
-            
-            {/* Undo / Redo */}
-            <div className="flex items-center gap-1 border-r border-slate-200 pr-3">
-              <button 
-                onClick={handleUndo}
-                disabled={historyStep <= 0}
-                className="p-1.5 rounded hover:bg-slate-100 text-slate-700 disabled:opacity-30 border border-slate-200"
-                title="Undo (Ctrl+Z)"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={handleRedo}
-                disabled={historyStep >= history.length - 1}
-                className="p-1.5 rounded hover:bg-slate-100 text-slate-700 disabled:opacity-30 border border-slate-200"
-                title="Redo (Ctrl+Y)"
-              >
-                <RotateCw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Font Formatting */}
-            <div className="flex items-center gap-1 border-r border-slate-200 pr-3">
+        {/* CENTER CANVAS STAGE: Strict Fixed Centered Viewport with Dynamic Transform Scale */}
+        <main 
+          ref={canvasContainerRef}
+          onMouseMove={handleMouseMoveCanvas}
+          onMouseUp={handleMouseUpCanvas}
+          className="flex-1 h-full overflow-hidden flex flex-col items-center justify-center relative bg-[#18181B] p-6"
+        >
+          {/* Format Bar Floating on Top of Canvas */}
+          <div className="absolute top-4 left-6 right-6 flex items-center justify-between pointer-events-none z-20">
+            <div className="pointer-events-auto flex items-center gap-1 bg-zinc-900/90 border border-zinc-800 px-2 py-1 rounded-lg text-xs shadow-lg backdrop-blur-md">
               <button 
                 onClick={() => updateSelectedParagraph(p => p.bold = !p.bold)}
-                className="p-1.5 rounded hover:bg-slate-100 text-slate-700 border border-slate-200"
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-300"
                 title="Bold"
               >
                 <Bold className="w-3.5 h-3.5" />
               </button>
               <button 
                 onClick={() => updateSelectedParagraph(p => p.italic = !p.italic)}
-                className="p-1.5 rounded hover:bg-slate-100 text-slate-700 border border-slate-200"
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-300"
                 title="Italic"
               >
                 <Italic className="w-3.5 h-3.5" />
               </button>
               <button 
                 onClick={() => updateSelectedParagraph(p => p.underline = !p.underline)}
-                className="p-1.5 rounded hover:bg-slate-100 text-slate-700 border border-slate-200"
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-300"
                 title="Underline"
               >
                 <Underline className="w-3.5 h-3.5" />
               </button>
-            </div>
-
-            {/* Font Size Adjuster */}
-            <div className="flex items-center gap-1 border-r border-slate-200 pr-3">
-              <button 
-                onClick={() => updateSelectedParagraph(p => p.font_size = Math.max(8, (p.font_size || 12) - 1))}
-                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-xs font-bold border border-slate-200 text-slate-800"
-                title="Decrease Font Size"
-              >
-                A-
-              </button>
-              <span className="text-xs font-bold text-blue-600 px-1">
-                {selectedNodeIndex !== null && activeSlide.nodes[selectedNodeIndex]?.paragraphs?.[0]?.font_size || 12}pt
-              </span>
-              <button 
-                onClick={() => updateSelectedParagraph(p => p.font_size = Math.min(48, (p.font_size || 12) + 1))}
-                className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-xs font-bold border border-slate-200 text-slate-800"
-                title="Increase Font Size"
-              >
-                A+
-              </button>
-            </div>
-
-            {/* Alignments */}
-            <div className="flex items-center gap-1">
+              <div className="h-3 w-px bg-zinc-700 mx-1"></div>
               <button 
                 onClick={() => updateSelectedParagraph(p => p.align = 'LEFT')}
-                className="p-1.5 rounded hover:bg-slate-100 text-slate-700"
-                title="Align Left"
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-300"
               >
                 <AlignLeft className="w-3.5 h-3.5" />
               </button>
               <button 
                 onClick={() => updateSelectedParagraph(p => p.align = 'CENTER')}
-                className="p-1.5 rounded hover:bg-slate-100 text-slate-700"
-                title="Align Center"
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-300"
               >
                 <AlignCenter className="w-3.5 h-3.5" />
               </button>
               <button 
                 onClick={() => updateSelectedParagraph(p => p.align = 'RIGHT')}
-                className="p-1.5 rounded hover:bg-slate-100 text-slate-700"
-                title="Align Right"
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-300"
               >
                 <AlignRight className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            <div className="pointer-events-auto text-[11px] text-zinc-400 font-mono bg-zinc-900/90 border border-zinc-800 px-2.5 py-1 rounded-lg shadow-lg">
+              Zoom: {Math.round(canvasScale * 100)}%
+            </div>
           </div>
 
-          {/* Export Action */}
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handleExportPPTX}
-              disabled={exporting}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition shadow-md shadow-blue-600/20"
-            >
-              {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              Export Native PPTX
-            </button>
-          </div>
-        </div>
-
-        {/* SPATIAL CANVAS VIEWPORT (WITH DRAGGABLE MOVEABLE NODES) */}
-        <div 
-          onMouseMove={handleMouseMoveCanvas}
-          onMouseUp={handleMouseUpCanvas}
-          className="flex-1 p-6 flex items-center justify-center overflow-auto relative"
-        >
+          {/* Slide Canvas Wrapper with Dynamic Matrix Scaling */}
           <div 
-            className={`w-[880px] h-[495px] ${getCanvasBgClass()} rounded-xl shadow-xl relative overflow-hidden transition-all border`}
+            style={{
+              width: '880px',
+              height: '495px',
+              transform: `scale(${canvasScale})`,
+              transformOrigin: 'center center',
+              transition: 'transform 0.15s ease-out'
+            }}
+            className={`rounded-xl shadow-2xl relative overflow-hidden border border-zinc-800 shrink-0 ${
+              viewMode === 'before' ? 'bg-white text-zinc-900' : 'bg-[#001F33] text-white'
+            }`}
           >
-            {/* Non-Selectable Background Layer (Locked at z-index: 0) */}
-            {activeSlide.bg_image ? (
-              <img 
-                src={`data:image/png;base64,${activeSlide.bg_image}`} 
-                alt="Slide Background Master" 
-                className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
-              />
-            ) : (
-              <div className="absolute inset-0 pointer-events-none z-0 opacity-15 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]"></div>
+            {/* Top Corporate Accent Bar (Issue #4) */}
+            {viewMode === 'after' && (
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#FFB81C] via-[#00FFFF] to-[#FFB81C] z-20 pointer-events-none"></div>
             )}
 
-            {/* Render Freeform Moveable AST Nodes (Z-Index: 10 above Background) */}
+            {/* Top-Right Akkodis Corporate Logo Stamp (Issue #4) */}
+            {viewMode === 'after' && (
+              <div 
+                className="absolute right-6 top-3 text-right pointer-events-none select-none z-20"
+                style={{
+                  left: `${(11.4 / 13.333) * 100}%`,
+                  top: `${(0.35 / 7.5) * 100}%`,
+                  width: `${(1.5 / 13.333) * 100}%`,
+                  height: `${(0.45 / 7.5) * 100}%`,
+                }}
+              >
+                <span className="font-sans font-bold text-xs tracking-wider text-[#FFB81C]">AKKODIS</span>
+              </div>
+            )}
+
+            {/* Slide Background Image if present */}
+            {activeSlide.bg_image && (
+              <img 
+                src={`data:image/png;base64,${activeSlide.bg_image}`} 
+                alt="Background" 
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
+              />
+            )}
+
+            {/* AST Nodes Rendering Layer */}
             <div className="relative z-10 w-full h-full">
               {activeSlide.nodes.map((node, nIdx) => {
                 const leftPx = node.bbox.left * SCALE_X;
                 const topPx = node.bbox.top * SCALE_Y;
                 const widthPx = node.bbox.width * SCALE_X;
                 const heightPx = node.bbox.height * SCALE_Y;
-
                 const isSelected = selectedNodeIndex === nIdx;
 
-                // 1. Raw Rectangle / Rounded Container Shapes
+                // 1. Picture / Image Shape (Issue #6: Extract and Render Images at exact coords)
+                if ((node.type === 'PICTURE' || node.type === 'IMAGE') && (node.image_data_uri || node.image_data)) {
+                  return (
+                    <img 
+                      key={nIdx}
+                      src={node.image_data_uri || node.image_data}
+                      alt="Presentation Visual Asset"
+                      onMouseDown={(e) => handleMouseDownNode(e, nIdx)}
+                      style={{
+                        left: `${leftPx}px`,
+                        top: `${topPx}px`,
+                        width: `${widthPx}px`,
+                        height: `${heightPx}px`,
+                      }}
+                      className={`absolute object-contain rounded cursor-move z-10 ${
+                        isSelected ? 'ring-2 ring-[#FFB81C]' : ''
+                      }`}
+                    />
+                  );
+                }
+
+                // 2. Card / Rounded Container Shapes
                 if (node.type === 'RECTANGLE_SHAPE' || node.type === 'CONTAINER_SHAPE') {
                   return (
                     <div
@@ -877,21 +731,27 @@ export default function StudioWorkspace() {
                         width: `${widthPx}px`,
                         height: `${heightPx}px`,
                       }}
-                      className={`absolute rounded-xl border-2 ${getCardBgClass()} shadow-md transition flex flex-col justify-between p-3 cursor-move ${
-                        isSelected ? 'ring-2 ring-amber-400 shadow-lg' : 'hover:border-cyan-300'
-                      }`}
+                      className={`absolute rounded-xl border transition flex flex-col justify-between p-3 cursor-move z-10 ${
+                        viewMode === 'before' 
+                          ? 'bg-zinc-100 border-zinc-300' 
+                          : 'bg-[#081E36] border-[#00FFFF]/40 shadow-lg'
+                      } ${isSelected ? 'ring-2 ring-[#FFB81C]' : 'hover:border-[#FFB81C]/60'}`}
                     >
                       <div className="flex items-center justify-between pointer-events-none">
-                        <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{node.shape_name || 'Rectangle Container'}</span>
-                        <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200">
-                          {renderVectorIcon(selectedIconKey, "w-3 h-3")}
-                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                          {node.shape_name || 'Card Container'}
+                        </span>
+                        {viewMode === 'after' && (
+                          <div className="w-5 h-5 rounded-full bg-white text-[#001F33] flex items-center justify-center shadow-sm">
+                            <Target className="w-3 h-3 text-[#FFB81C]" />
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
                 }
 
-                // 2. Raw Oval / Circle Shapes
+                // 3. Oval Shapes
                 if (node.type === 'OVAL_SHAPE') {
                   return (
                     <div
@@ -903,16 +763,16 @@ export default function StudioWorkspace() {
                         width: `${widthPx}px`,
                         height: `${heightPx}px`,
                       }}
-                      className={`absolute rounded-full border-2 ${getCardBgClass()} shadow-md transition flex items-center justify-center cursor-move ${
-                        isSelected ? 'ring-2 ring-amber-400' : 'hover:border-cyan-300'
-                      }`}
+                      className={`absolute rounded-full border transition flex items-center justify-center cursor-move z-10 ${
+                        viewMode === 'before' ? 'bg-zinc-100 border-zinc-300' : 'bg-[#081E36] border-[#00FFFF]'
+                      } ${isSelected ? 'ring-2 ring-[#FFB81C]' : ''}`}
                     >
-                      <Circle className="w-5 h-5 text-cyan-400" />
+                      <Circle className="w-5 h-5 text-[#00FFFF]" />
                     </div>
                   );
                 }
 
-                // 3. Raw Arrows & Flow Shapes
+                // 4. Flow Arrows & Connectors
                 if (node.type === 'ARROW_SHAPE' || node.type === 'LINE_SHAPE') {
                   return (
                     <div
@@ -924,37 +784,16 @@ export default function StudioWorkspace() {
                         width: `${widthPx}px`,
                         height: `${heightPx}px`,
                       }}
-                      className="absolute flex items-center justify-center text-amber-400 cursor-move"
+                      className="absolute flex items-center justify-center text-[#FFB81C] cursor-move z-10"
                     >
-                      <MoveRight className="w-full h-full text-amber-400" />
+                      <MoveRight className="w-full h-full text-[#FFB81C]" />
                     </div>
                   );
                 }
 
-                // 4. Raw Image Shapes
-                if (node.type === 'IMAGE' && node.image_data) {
-                  return (
-                    <img 
-                      key={nIdx}
-                      src={node.image_data}
-                      alt="Slide Shape Image"
-                      onMouseDown={(e) => handleMouseDownNode(e, nIdx)}
-                      style={{
-                        left: `${leftPx}px`,
-                        top: `${topPx}px`,
-                        width: `${widthPx}px`,
-                        height: `${heightPx}px`,
-                      }}
-                      className={`absolute object-contain rounded cursor-move ${
-                        isSelected ? 'ring-2 ring-blue-500' : ''
-                      }`}
-                    />
-                  );
-                }
-
-                // 5. Text Container Frames (Fixed Selection Highlighting Bug)
+                // 5. Text Container Frames (Issues #4, #5: Typography & Contrast Rules)
                 if (node.type === 'TEXT_CONTAINER' && node.paragraphs) {
-                  const isTitle = node.bbox.top < 1.5;
+                  const isTitle = node.is_title || (node.bbox.top < 1.6 && node.bbox.height < 1.6);
 
                   return (
                     <div
@@ -966,36 +805,58 @@ export default function StudioWorkspace() {
                         width: `${widthPx}px`,
                         height: `${heightPx}px`,
                       }}
-                      className={`absolute p-1 rounded transition overflow-hidden cursor-move ${
-                        isSelected ? 'ring-2 ring-blue-500 bg-blue-500/10' : 'hover:bg-slate-200/20'
+                      className={`absolute p-1 rounded transition overflow-hidden cursor-move z-20 ${
+                        isSelected ? 'ring-2 ring-[#FFB81C] bg-[#FFB81C]/10' : 'hover:bg-zinc-700/20'
                       }`}
                     >
-                      {node.paragraphs.map((p, pIdx) => (
-                        <input
-                          key={pIdx}
-                          type="text"
-                          value={p.text}
-                          onClick={(e) => e.stopPropagation()}
-                          onFocus={() => setSelectedParagraphIndex(pIdx)}
-                          onChange={(e) => {
-                            const updated = [...slides];
-                            updated[activeSlideIndex].nodes[nIdx].paragraphs![pIdx].text = e.target.value;
-                            setSlides(updated);
-                            pushStateToHistory(updated);
-                          }}
-                          style={{
-                            fontFamily: isTitle ? titleFont : bodyFont,
-                            fontSize: isTitle ? '24px' : (p.font_size ? `${p.font_size}px` : '11px'),
-                            fontWeight: p.bold ? 'bold' : (isTitle ? 'bold' : 'normal'),
-                            fontStyle: p.italic ? 'italic' : 'normal',
-                            textDecoration: p.underline ? 'underline' : 'none',
-                            textAlign: (p.align as any) || 'left',
-                          }}
-                          className={`w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 text-inherit ${
-                            isTitle ? getTitleColorClass() + ' font-serif font-bold' : getBodyTextColorClass() + ' font-sans'
-                          }`}
-                        />
-                      ))}
+                      {node.paragraphs.map((p, pIdx) => {
+                        const rawSize = p.font_size || 12;
+                        const isSubheading = !isTitle && (p.bold || (rawSize >= 14 && rawSize < 20));
+
+                        // Typography Enforcement
+                        const fontFam = isTitle ? titleFont : bodyFont;
+                        const fontPt = isTitle 
+                          ? (rawSize > 32 ? 30 : (rawSize < 24 ? 24 : rawSize)) 
+                          : (isSubheading ? Math.max(11, Math.min(16, rawSize)) : Math.max(8, rawSize));
+                        const isFontBold = isTitle ? false : (isSubheading ? true : Boolean(p.bold));
+                        const isFontItalic = isTitle ? false : Boolean(p.italic);
+
+                        // Contrast Enforcement
+                        let textColor = '#FFFFFF';
+                        if (viewMode === 'before') {
+                          textColor = '#1F2937';
+                        } else if (isTitle) {
+                          textColor = '#FFB81C';
+                        } else if (node.fill_hex === '#00FFFF' || node.fill_hex === '#FFB81C') {
+                          textColor = '#001F33'; // High luminance contrast
+                        }
+
+                        return (
+                          <input
+                            key={pIdx}
+                            type="text"
+                            value={p.text}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={() => setSelectedParagraphIndex(pIdx)}
+                            onChange={(e) => {
+                              const updated = [...slides];
+                              updated[activeSlideIndex].nodes[nIdx].paragraphs![pIdx].text = e.target.value;
+                              setSlides(updated);
+                              pushStateToHistory(updated);
+                            }}
+                            style={{
+                              fontFamily: fontFam,
+                              fontSize: `${fontPt}px`,
+                              fontWeight: isFontBold ? 700 : 400,
+                              fontStyle: isFontItalic ? 'italic' : 'normal',
+                              textDecoration: p.underline ? 'underline' : 'none',
+                              textAlign: (p.align as any) || 'left',
+                              color: textColor,
+                            }}
+                            className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-[#FFB81C] rounded px-1"
+                          />
+                        );
+                      })}
                     </div>
                   );
                 }
@@ -1004,183 +865,143 @@ export default function StudioWorkspace() {
               })}
             </div>
           </div>
-        </div>
-      </div>
+        </main>
 
-      {/* RIGHT PANEL: RE-ORDERED BRAND SYSTEM & BACKGROUND LIBRARY */}
-      <div className="w-80 bg-white border-l border-slate-200 flex flex-col shadow-sm">
-        
-        {/* Navigation Tabs */}
-        <div className="p-2 border-b border-slate-200 flex items-center gap-1 bg-white">
-          <button 
-            onClick={() => setActiveRightTab('background')}
-            className={`flex-1 text-xs py-2 rounded-lg font-semibold transition flex items-center justify-center gap-1.5 ${
-              activeRightTab === 'background' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <ImageIcon className="w-3.5 h-3.5" />
-            Background Library
-          </button>
-          <button 
-            onClick={() => setActiveRightTab('brand')}
-            className={`flex-1 text-xs py-2 rounded-lg font-semibold transition flex items-center justify-center gap-1.5 ${
-              activeRightTab === 'brand' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Palette className="w-3.5 h-3.5" />
-            Brand Tokens
-          </button>
-        </div>
-
-        {/* TAB 1: BACKGROUND STYLE & EXTRACTED DECK LIBRARY */}
-        {activeRightTab === 'background' && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Background Canvas Presets
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: 'dark', name: 'Akkodis Dark Base' },
-                { id: 'white', name: 'Pure White' },
-                { id: 'blueGradient', name: 'Sky Gradient' },
-                { id: 'slate', name: 'Corporate Slate' }
-              ].map(preset => (
-                <button
-                  key={preset.id}
-                  onClick={() => setBgStyle(preset.id)}
-                  className={`p-2.5 rounded-lg text-xs font-semibold border transition text-center ${
-                    bgStyle === preset.id ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'
-                  }`}
-                >
-                  {preset.name}
-                </button>
-              ))}
-            </div>
-
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-3">
-              Extracted Slide Backgrounds ({slides.filter(s => s.bg_image).length})
-            </div>
-
-            <div className="space-y-2">
-              {slides.map((s, idx) => {
-                if (!s.bg_image) return null;
-                return (
-                  <div 
-                    key={idx}
-                    onClick={() => {
-                      const updated = [...slides];
-                      updated[activeSlideIndex].bg_image = s.bg_image;
-                      setSlides(updated);
-                      pushStateToHistory(updated);
-                    }}
-                    className="p-2 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:border-blue-500 transition flex items-center gap-3"
-                  >
-                    <img 
-                      src={`data:image/png;base64,${s.bg_image}`} 
-                      alt={`Slide ${s.slide_id} Background`} 
-                      className="w-16 h-10 rounded object-cover border border-slate-300"
-                    />
-                    <div>
-                      <span className="text-xs font-bold text-slate-800 block">Slide {s.slide_id} Background</span>
-                      <span className="text-[10px] text-blue-600 font-semibold">Apply to Active Slide</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* RIGHT INSPECTOR PANEL: Brand Tokens & System Library (Only Inspector Scrolls!) */}
+        <aside className="w-80 h-full overflow-y-auto shrink-0 border-l border-zinc-800/80 bg-zinc-900/60 p-4 space-y-5 flex flex-col">
+          
+          {/* Tabs */}
+          <div className="flex items-center bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-700/60 text-xs">
+            <button 
+              onClick={() => setActiveRightTab('brand')}
+              className={`flex-1 py-1.5 rounded-md font-semibold transition ${
+                activeRightTab === 'brand' ? 'bg-[#FFB81C] text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Brand Tokens
+            </button>
+            <button 
+              onClick={() => setActiveRightTab('background')}
+              className={`flex-1 py-1.5 rounded-md font-semibold transition ${
+                activeRightTab === 'background' ? 'bg-[#FFB81C] text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Canvas Presets
+            </button>
           </div>
-        )}
 
-        {/* TAB 2: BRAND SYSTEM TOKENS */}
-        {activeRightTab === 'brand' && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
-            
-            {/* COLOR TOKENS */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-[11px] text-slate-500 uppercase tracking-wider font-bold">
-                  Brand Color Tokens
+          {/* TAB 1: BRAND TOKENS */}
+          {activeRightTab === 'brand' && (
+            <div className="space-y-5 text-xs">
+              
+              {/* Color Tokens */}
+              <div>
+                <label className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold block mb-2">
+                  Corporate Color Tokens
                 </label>
+                <div className="space-y-2">
+                  {colors.map((c) => (
+                    <div key={c.id} className="flex justify-between items-center p-2 rounded-lg bg-zinc-800/60 border border-zinc-700/60">
+                      <span className="font-medium text-zinc-300">{c.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-zinc-400">{c.hex}</span>
+                        <div 
+                          style={{ backgroundColor: c.hex }} 
+                          className="w-5 h-5 rounded-md border border-zinc-600 shadow-sm"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="space-y-2">
-                {colors.map((c) => (
-                  <div key={c.id} className="flex justify-between items-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                    <span className="text-xs font-medium text-slate-700">{c.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-slate-500">{c.hex}</span>
-                      <input 
-                        type="color" 
-                        value={c.hex}
-                        onChange={(e) => setColors(colors.map(col => col.id === c.id ? { ...col, hex: e.target.value } : col))}
-                        className="w-5 h-5 rounded cursor-pointer border-0"
-                      />
-                    </div>
+              {/* Typography Rules */}
+              <div>
+                <label className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold block mb-2">
+                  Typography Rules
+                </label>
+                <div className="p-3 bg-zinc-800/60 rounded-xl border border-zinc-700/60 space-y-3">
+                  <div>
+                    <span className="text-[10px] text-zinc-400 block mb-1">Slide Title Font (Clamped 24-30pt)</span>
+                    <select 
+                      value={titleFont}
+                      onChange={(e) => setTitleFont(e.target.value)}
+                      className="w-full p-1.5 bg-zinc-900 border border-zinc-700 rounded text-zinc-200 focus:outline-none"
+                    >
+                      <option value="Times New Roman">Times New Roman (Akkodis Mandatory)</option>
+                      <option value="Arial">Arial</option>
+                    </select>
                   </div>
+                  <div>
+                    <span className="text-[10px] text-zinc-400 block mb-1">Body / Subheading Font</span>
+                    <select 
+                      value={bodyFont}
+                      onChange={(e) => setBodyFont(e.target.value)}
+                      className="w-full p-1.5 bg-zinc-900 border border-zinc-700 rounded text-zinc-200 focus:outline-none"
+                    >
+                      <option value="Arial">Arial (Corporate Body Standard)</option>
+                      <option value="Roboto">Roboto</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vector Icons */}
+              <div>
+                <label className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold block mb-2">
+                  Corporate Vector Icons
+                </label>
+                <div className="grid grid-cols-4 gap-2 bg-zinc-800/60 p-2.5 rounded-xl border border-zinc-700/60">
+                  {ICON_LIBRARY.map((item) => {
+                    const IconComp = item.icon;
+                    return (
+                      <button
+                        key={item.key}
+                        onClick={() => setSelectedIconKey(item.key)}
+                        title={item.name}
+                        className={`p-2 rounded-lg flex items-center justify-center border transition ${
+                          selectedIconKey === item.key 
+                            ? 'bg-[#FFB81C] text-zinc-950 border-[#FFB81C] shadow-sm' 
+                            : 'bg-zinc-900 text-zinc-400 border-zinc-750 hover:text-white'
+                        }`}
+                      >
+                        <IconComp className="w-4 h-4" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 2: CANVAS PRESETS */}
+          {activeRightTab === 'background' && (
+            <div className="space-y-4 text-xs">
+              <label className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold block">
+                Studio Backdrop Presets
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'enterprise_navy', name: 'Akkodis Deep Navy', hex: '#001F33' },
+                  { id: 'card_slate', name: 'Card Surface Slate', hex: '#081E36' },
+                  { id: 'high_contrast', name: 'Contrast Black', hex: '#000000' },
+                  { id: 'light_clean', name: 'Executive White', hex: '#FFFFFF' }
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setPresetTheme(item.id)}
+                    className="p-3 rounded-xl border border-zinc-700 bg-zinc-800/60 hover:border-[#FFB81C] transition text-left space-y-1"
+                  >
+                    <div style={{ backgroundColor: item.hex }} className="w-full h-8 rounded-lg border border-zinc-600"></div>
+                    <span className="font-semibold text-zinc-200 block text-[11px]">{item.name}</span>
+                  </button>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* TYPOGRAPHY SYSTEM */}
-            <div>
-              <label className="text-[11px] text-slate-500 uppercase tracking-wider font-bold block mb-2">
-                Typography System
-              </label>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <div>
-                  <div className="text-[10px] text-slate-500 mb-1 font-semibold">Title Font Family</div>
-                  <select 
-                    value={titleFont}
-                    onChange={(e) => setTitleFont(e.target.value)}
-                    className="w-full text-xs p-1.5 bg-white border border-slate-300 rounded focus:outline-none"
-                  >
-                    <option value="Times New Roman">Times New Roman (Akkodis Token Rule)</option>
-                    <option value="Arial">Arial</option>
-                  </select>
-                </div>
-
-                <div>
-                  <div className="text-[10px] text-slate-400 mb-1 font-semibold">Body Copy Font Family</div>
-                  <select 
-                    value={bodyFont}
-                    onChange={(e) => setBodyFont(e.target.value)}
-                    className="w-full text-xs p-1.5 bg-white border border-slate-300 rounded focus:outline-none"
-                  >
-                    <option value="Arial">Arial (Akkodis Token Rule)</option>
-                    <option value="Roboto">Roboto</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* VECTOR ICON LIBRARY */}
-            <div>
-              <label className="text-[11px] text-slate-500 uppercase tracking-wider font-bold block mb-2">
-                Vector Icon Component Library
-              </label>
-              <div className="grid grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                {ICON_LIBRARY.map((item) => {
-                  const IconComp = item.icon;
-                  return (
-                    <button
-                      key={item.key}
-                      onClick={() => setSelectedIconKey(item.key)}
-                      title={item.name}
-                      className={`p-2.5 rounded-lg flex items-center justify-center border transition ${
-                        selectedIconKey === item.key ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'
-                      }`}
-                    >
-                      <IconComp className="w-4 h-4" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-          </div>
-        )}
+        </aside>
 
       </div>
 

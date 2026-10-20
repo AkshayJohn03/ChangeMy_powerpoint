@@ -25,6 +25,7 @@ BUCKET_REVIEW = SOURCE_DIR / "review"
 #     folder_pair         : Raw\<name>.pptx <-> Updated\<name> v1.pptx
 #     clean_only          : assumed branded reference decks
 DOCUMENT_ROOTS = [
+    ("10Oct", r"C:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\10 Oct 2026", "golden_vs_raw"),
     ("10Dec", r"C:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\10 Dec", "clean_only"),
     ("11June", r"C:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\11 June", "clean_only"),
     ("12Dec", r"C:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\12 Dec", "filename_raw_suffix"),

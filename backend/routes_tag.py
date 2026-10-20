@@ -14,11 +14,13 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from morphlite.pipeline.template_tag import TemplateTagPipeline
 
+LITE_TEMPLATE = REPO_ROOT / "data" / "brand_template" / "Akkodis_Sanitized_Master_Lite.pptx"
 TAGGED_TEMPLATE = REPO_ROOT / "data" / "brand_template" / "Brand_guideline_Akkodis_tagged.pptx"
 TEMPLATE = REPO_ROOT / "data" / "brand_template" / "Brand_guideline_Akkodis.pptx"
 FALLBACK = Path(r"C:\Users\Akshay.JOHN-XAVIER\OneDrive - Akkodis\Documents\Me\Brand_guideline_Akkodis.pptx")
 
 def _tpl():
+    if LITE_TEMPLATE.exists(): return str(LITE_TEMPLATE)
     if TAGGED_TEMPLATE.exists(): return str(TAGGED_TEMPLATE)
     if TEMPLATE.exists(): return str(TEMPLATE)
     if FALLBACK.exists(): return str(FALLBACK)

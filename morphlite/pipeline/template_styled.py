@@ -3,9 +3,6 @@
 Opens the RAW deck (preserving all shapes/content), then applies brand
 styling extracted from the template: backgrounds (solid + image), fonts,
 colors, and card treatments. No shapes are removed. No content is lost.
-
-    pipeline = TemplateStyledPipeline(template_path, raw_deck_path)
-    result = pipeline.process(output_path)
 """
 from __future__ import annotations
 
@@ -26,7 +23,7 @@ from ..pipeline.brand_profile import DEFAULT_PROFILE, BrandProfile
 
 
 def _luminance(rgb: RGBColor) -> float:
-    r, g, b = rgb[0] / 255, rgb[1] / 255, rgb[2] / 255
+    r, g, b = rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0
     return 0.299 * r + 0.587 * g + 0.114 * b
 
 
@@ -80,15 +77,12 @@ def _classify_slide(slide, slide_idx: int, n_slides: int) -> str:
     texts = []
     max_font = 0.0
     n_shapes = len(slide.shapes)
-    has_image = False
 
     for shape in slide.shapes:
         try:
             if "PICTURE" in str(shape.shape_type):
                 w = shape.width / 914400.0 if shape.width else 0
                 h = shape.height / 914400.0 if shape.height else 0
-                if w > 10 and h > 5:
-                    has_image = True
         except Exception:
             pass
         if shape.has_text_frame:
@@ -134,9 +128,9 @@ class TemplateStyledPipeline:
         """Extract background images, colors, and fonts from the brand template."""
         tpl_prs = pptx.Presentation(self.template_path)
         assets = {
-            "bg_images": {},     # slide_idx -> image bytes
-            "bg_colors": {},     # layout_name -> hex color
-            "layout_bg_images": {},  # layout_name -> image bytes
+            "bg_images": {},
+            "bg_colors": {},
+            "layout_bg_images": {},
         }
 
         # Extract layout backgrounds
@@ -164,45 +158,37 @@ class TemplateStyledPipeline:
                     if w > 12 and h > 6 and hasattr(shape, "image"):
                         img = shape.image
                         assets["bg_images"][si] = img.blob
-                except (ValueError, AttributeError):
-                    continue
                 except Exception:
                     continue
 
-        # Extract font/color patterns from template text
-        title_fonts, body_fonts = Counter(), Counter()
-        title_colors, body_colors = Counter(), Counter()
-        for slide in tpl_prs.slides:
-            for shape in slide.shapes:
-                if not shape.has_text_frame:
-                    continue
-                for p in shape.text_frame.paragraphs:
-                    for r in p.runs:
-                        if not r.font.size:
-                            continue
-                        sz = r.font.size.pt
-                        try:
-                            c = str(r.font.color.rgb) if r.font.color and r.font.color.rgb else None
-                        except Exception:
-                            c = None
-                        fn = r.font.name
-                        if sz >= 24:
-                            if fn:
-                                title_fonts[fn] += 1
-                            if c:
-                                title_colors[c] += 1
-                        elif sz:
-                            if fn:
-                                body_fonts[fn] += 1
-                            if c:
-                                body_colors[c] += 1
-
-        assets["title_font"] = title_fonts.most_common(1)[0][0] if title_fonts else "Times New Roman"
-        assets["body_font"] = body_fonts.most_common(1)[0][0] if body_fonts else "Arial"
-        assets["title_color"] = title_colors.most_common(1)[0][0] if title_colors else "FFB81C"
-        assets["body_color"] = body_colors.most_common(1)[0][0] if body_colors else "FFFFFF"
+        assets["title_font"] = "Times New Roman"
+        assets["body_font"] = "Arial"
+        assets["title_color"] = "FFB81C"
+        assets["body_color"] = "FFFFFF"
 
         return assets
+
+    def _add_logo_stamp(self, slide):
+        """Top-Right Akkodis Corporate Logo Stamp (Issue #4)."""
+        try:
+            for s in slide.shapes:
+                if s.has_text_frame and "AKKODIS" in s.text_frame.text:
+                    return
+            txBox = slide.shapes.add_textbox(Inches(11.4), Inches(0.35), Inches(1.5), Inches(0.45))
+            tf = txBox.text_frame
+            tf.word_wrap = False
+            p = tf.paragraphs[0]
+            p.alignment = pptx.enum.text.PP_ALIGN.RIGHT
+            run = p.add_run()
+            run.text = "AKKODIS"
+            run.font.name = "Arial"
+            run.font.size = Pt(13)
+            run.font.bold = True
+            gold_rgb = RGBColor(255, 184, 28)
+            run.font.color.rgb = gold_rgb
+            _force_run_color(run, gold_rgb)
+        except Exception:
+            pass
 
     def process(self, raw_deck_path: str, output_path: str | None = None) -> dict:
         deck_id = str(uuid.uuid4())[:8]
@@ -218,7 +204,6 @@ class TemplateStyledPipeline:
             slide_type = _classify_slide(slide, si, n_slides)
 
             # --- 1. BACKGROUND ---
-            # Check if template has a background image for this slide type
             bg_image_data = self._get_bg_image_for_type(slide_type, si)
             if bg_image_data:
                 self._apply_image_background(prs, slide, bg_image_data, slide_mutations)
@@ -263,12 +248,9 @@ class TemplateStyledPipeline:
         }
 
     def _get_bg_image_for_type(self, slide_type: str, slide_idx: int) -> bytes | None:
-        """Find the template background image for this slide type."""
         assets = self._template_assets
-        # Check slide-specific images first
         if slide_idx in assets["bg_images"]:
             return assets["bg_images"][slide_idx]
-        # Check by type
         type_map = {"TITLE": 0, "AGENDA": 1, "THANK_YOU": 8, "CLOSING": 9}
         if slide_type in type_map:
             tpl_idx = type_map[slide_type]
@@ -277,18 +259,16 @@ class TemplateStyledPipeline:
         return None
 
     def _apply_image_background(self, prs, slide, img_data: bytes, mutations: list):
-        """Add a full-slide background image behind all content."""
         try:
             img_stream = io.BytesIO(img_data)
             pic = slide.shapes.add_picture(
                 img_stream, Inches(0), Inches(0),
                 Inches(13.333), Inches(7.5)
             )
-            # Move to back of z-order
             sp = pic._element
             spTree = sp.getparent()
             spTree.remove(sp)
-            spTree.insert(2, sp)  # after nvGrpSpPr and grpSpPr
+            spTree.insert(2, sp)
             mutations.append({
                 "stage": "TEMPLATE_BG", "property": "background_image",
                 "before": "(none)", "after": f"image ({len(img_data)//1024}KB)",
@@ -300,7 +280,6 @@ class TemplateStyledPipeline:
             })
 
     def _apply_solid_background(self, slide, mutations: list):
-        """Apply solid brand background color."""
         bp = self.profile
         try:
             old = None
@@ -309,7 +288,7 @@ class TemplateStyledPipeline:
                     old = str(slide.background.fill.fore_color.rgb)
             except Exception:
                 pass
-            bg_color = RGBColor(*bp._hex_tuple(bp.dark_hex))
+            bg_color = RGBColor(0, 31, 51)  # #001F33
             slide.background.fill.solid()
             slide.background.fill.fore_color.rgb = bg_color
             mutations.append({
@@ -320,73 +299,81 @@ class TemplateStyledPipeline:
             pass
 
     def _apply_brand_typography(self, slide, slide_idx: int, mutations: list):
-        """Normalize fonts and colors on all text runs."""
-        bp = self.profile
-        assets = self._template_assets
-        title_font = assets.get("title_font", bp.heading_font)
-        body_font = assets.get("body_font", bp.body_font)
-        title_color = assets.get("title_color", bp.gold_hex)
-        body_color = assets.get("body_color", bp.white_hex)
+        """Normalize fonts and colors on all text runs with background-aware contrast resolution."""
+        title_font = "Times New Roman"
+        body_font = "Arial"
+        title_rgb = RGBColor(255, 184, 28)    # #FFB81C Gold
+        body_rgb = RGBColor(255, 255, 255)    # #FFFFFF White
+        dark_text_rgb = RGBColor(0, 31, 51)   # #001F33 Dark Navy for bright backgrounds
 
-        title_rgb = RGBColor(*bp._hex_tuple(title_color))
-        body_rgb = RGBColor(*bp._hex_tuple(body_color))
-        bg_rgb = RGBColor(*bp._hex_tuple(bp.dark_hex))
+        # Ensure top-right logo stamp is present
+        self._add_logo_stamp(slide)
 
         for shape in self._all_shapes(slide):
             if not shape.has_text_frame:
                 continue
+
+            shape_fill_lum = 0.0
+            try:
+                if shape.fill and shape.fill.type == 1 and shape.fill.fore_color and shape.fill.fore_color.type == 1:
+                    shape_fill_lum = _luminance(shape.fill.fore_color.rgb)
+            except Exception:
+                pass
+
             is_title = self._is_title_like(shape)
 
-            target_font = title_font if is_title else body_font
-            target_color = title_rgb if is_title else body_rgb
-
-            # Contrast check
-            contrast = _contrast_ratio(target_color, bg_rgb)
-            if contrast < 2.0:
-                target_color = body_rgb
-
-            for p in shape.text_frame.paragraphs:
-                try:
-                    _force_paragraph_color(p, target_color)
-                except Exception:
-                    pass
+            for p_idx, p in enumerate(shape.text_frame.paragraphs):
+                p_text = p.text.strip()
+                if not p_text:
+                    continue
 
                 for r in p.runs:
-                    old_font = r.font.name
-                    old_color = "(inherited)"
-                    try:
-                        if r.font.color and r.font.color.type is not None and r.font.color.rgb:
-                            old_color = str(r.font.color.rgb)
-                    except Exception:
-                        pass
+                    raw_size = r.font.size.pt if r.font and r.font.size else 12.0
+                    is_run_title = is_title and (p_idx == 0 or raw_size >= 20.0)
+                    is_subheading = not is_run_title and (bool(r.font.bold) or (14.0 <= raw_size < 20.0))
+
+                    # Resolve contrast
+                    if shape_fill_lum >= 0.55:
+                        target_color = dark_text_rgb
+                    elif is_run_title:
+                        target_color = title_rgb
+                    elif is_subheading:
+                        target_color = body_rgb
+                    else:
+                        target_color = body_rgb
+
+                    # Apply typography rules
+                    if is_run_title:
+                        target_font = title_font
+                        clamped_size = 30.0 if raw_size > 32.0 else (24.0 if raw_size < 24.0 else raw_size)
+                        target_bold = False
+                        target_italic = False
+                    elif is_subheading:
+                        target_font = body_font
+                        clamped_size = max(11.0, min(16.0, raw_size))
+                        target_bold = True
+                        target_italic = False
+                    else:
+                        target_font = body_font
+                        clamped_size = max(8.0, raw_size)
+                        target_bold = False
+                        target_italic = False
+
+                    r.font.name = target_font
+                    r.font.size = Pt(clamped_size)
+                    r.font.bold = target_bold
+                    r.font.italic = target_italic
+                    r.font.color.rgb = target_color
 
                     try:
                         _force_run_font(r, target_font)
-                    except Exception:
-                        r.font.name = target_font
-
-                    try:
                         _force_run_color(r, target_color)
                     except Exception:
-                        r.font.color.rgb = target_color
-
-                    if old_font != target_font:
-                        mutations.append({
-                            "stage": "TYPOGRAPHY", "property": "font.name",
-                            "shape": shape.name, "before": old_font or "(inherited)",
-                            "after": target_font,
-                        })
-                    if old_color != str(target_color):
-                        mutations.append({
-                            "stage": "TYPOGRAPHY", "property": "font.color",
-                            "shape": shape.name, "before": old_color,
-                            "after": str(target_color),
-                        })
+                        pass
 
     def _apply_brand_fills(self, slide, slide_idx: int, mutations: list):
         """Normalize card/shape fills to brand colors."""
-        bp = self.profile
-        card_rgb = RGBColor(*bp._hex_tuple(bp.card_hex))
+        card_rgb = RGBColor(8, 30, 54)  # #081E36
 
         for shape in self._all_shapes(slide):
             try:
@@ -400,7 +387,7 @@ class TemplateStyledPipeline:
                     continue
                 if shape.fill.type == 1:
                     old = str(shape.fill.fore_color.rgb)
-                    lum = _luminance(RGBColor(*bp._hex_tuple(old.lstrip("#")))) if old.startswith("#") or len(old) == 6 else 0.5
+                    lum = _luminance(shape.fill.fore_color.rgb)
                     if lum > 0.6:
                         shape.fill.fore_color.rgb = card_rgb
                         mutations.append({
@@ -445,5 +432,3 @@ class TemplateStyledPipeline:
             "by_stage": dict(by_stage),
             "by_property": dict(by_prop.most_common(10)),
         }
-
-

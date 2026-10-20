@@ -13,19 +13,21 @@ from typing import Dict, Any, List
 from routes_v01 import router as v01_router
 from routes_v02 import router as v02_router
 from routes_tag import router as tag_router
+from routes_golden import router as golden_router
 
 app = FastAPI(
     title="BrandMorph Engine",
-    description="Akkodis deck transformer — v01 template-styled + v02 intelligent + tag (docxtemplater-style)",
-    version="0.5.0",
+    description="Akkodis deck transformer — v01 template-styled + v02 intelligent + tag (docxtemplater-style) + golden morph",
+    version="0.6.0",
 )
 app.include_router(v01_router)
 app.include_router(v02_router)
 app.include_router(tag_router)
+app.include_router(golden_router)
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy", "version": "0.5.0", "pipelines": ["v01_template_styled", "v02_intelligent", "tag_docxtemplater"]}
+    return {"status": "healthy", "version": "0.6.0", "pipelines": ["v01_template_styled", "v02_intelligent", "tag_docxtemplater", "golden_morph"]}
 
 app.add_middleware(
     CORSMiddleware,

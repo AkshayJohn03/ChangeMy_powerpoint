@@ -31,7 +31,10 @@ BRAND_TEMPLATE_PATH = os.environ.get(
 def _get_template_path() -> str:
     if os.path.exists(BRAND_TEMPLATE_PATH):
         return BRAND_TEMPLATE_PATH
-    # fallback: look in data/brand_template
+    # fallback: prefer sanitized lite master, then raw brand template
+    lite = _REPO_ROOT / "data" / "brand_template" / "Akkodis_Sanitized_Master_Lite.pptx"
+    if lite.exists():
+        return str(lite)
     local = _REPO_ROOT / "data" / "brand_template" / "Brand_guideline_Akkodis.pptx"
     if local.exists():
         return str(local)
