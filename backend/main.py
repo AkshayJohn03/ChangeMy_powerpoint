@@ -164,6 +164,55 @@ async def api_deck_inventory(file: UploadFile = File(...)):
             os.remove(tmp_path)
 
 
+@app.get("/api/sample_pptx")
+async def get_sample_pptx():
+    """Download bundled unformatted sample presentation for one-click testing."""
+    samples_dir = os.path.join(os.path.dirname(__file__), "samples")
+    examples_dir = os.path.join(os.path.dirname(__file__), "examples")
+    sample_path = os.path.join(samples_dir, "sample_legacy_pitch.pptx")
+    if not os.path.exists(sample_path):
+        sample_path = os.path.join(examples_dir, "demo_raw.pptx")
+    if not os.path.exists(sample_path):
+        raise HTTPException(status_code=404, detail="Sample presentation not found")
+    return FileResponse(
+        sample_path,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        filename="sample_legacy_pitch.pptx",
+    )
+
+
+@app.get("/api/brands")
+async def get_brands():
+    """List available W3C DTCG brand presets with their palettes and typography."""
+    brands_dir = os.path.join(os.path.dirname(__file__), "brands")
+    presets = []
+    if os.path.exists(brands_dir):
+        for f in sorted(os.listdir(brands_dir)):
+            if f.endswith((".yaml", ".yml")):
+                bid = f.rsplit(".", 1)[0]
+                try:
+                    dna = BrandDNA.load(bid)
+                    pal = {}
+                    for role in ["background", "surface", "surface_alt", "text_primary", "text_muted", "accent_primary", "accent_secondary"]:
+                        c = getattr(dna.palette, role, None)
+                        if c is not None and hasattr(c, "hex"):
+                            pal[role] = c.hex
+                    presets.append({
+                        "id": bid,
+                        "name": dna.name,
+                        "palette": pal,
+                        "typography": {
+                            "heading": dna.typography.heading.family if dna.typography and dna.typography.heading else "Arial",
+                            "body": dna.typography.body.family if dna.typography and dna.typography.body else "Segoe UI",
+                        }
+                    })
+                except Exception:
+                    pass
+    return {"status": "success", "brands": presets}
+
+
+@app.post("/api/morph")
+@app.post("/api/morph_file")
 @app.post("/api/brand/apply")
 async def api_brand_apply(
     file: UploadFile = File(...),
@@ -171,7 +220,7 @@ async def api_brand_apply(
     dry_run: bool = Form(False),
     rewrite_copy: bool = Form(False),
 ):
-    """Re-brand a deck in place. Returns report JSON + base64 deck.
+    """Re-brand a deck in place. Returns report JSON, slide AST for canvas, and base64 deck.
 
     `dry_run=true` returns the morph plan without producing a deck.
     `rewrite_copy=true` enables LLM tone rewriting (needs LLM_API_KEY).
@@ -189,8 +238,29 @@ async def api_brand_apply(
             dna, llm,
             MorphOptions(dry_run=dry_run, rewrite_copy=True if rewrite_copy else None),
         ).run(src, out_tmp.name)
+
+        slides_ast = []
+        original_ast = []
+        try:
+            morphed_dec = SlideDecompiler(out_tmp.name if not dry_run else src)
+            slides_ast = morphed_dec.parse_deck()
+        except Exception:
+            pass
+
+        try:
+            orig_dec = SlideDecompiler(src)
+            original_ast = orig_dec.parse_deck()
+        except Exception:
+            pass
+
         if dry_run:
-            return {"status": "success", "report": report.to_json()}
+            return {
+                "status": "success",
+                "report": report.to_json(),
+                "slides": slides_ast or original_ast,
+                "original_slides": original_ast,
+                "slide_count": len(slides_ast or original_ast),
+            }
         with open(out_tmp.name, "rb") as f:
             deck_b64 = base64.b64encode(f.read()).decode("ascii")
         return {
@@ -198,6 +268,9 @@ async def api_brand_apply(
             "report": report.to_json(),
             "deck_base64": deck_b64,
             "filename": f"BrandMorph_{brand.replace('/', '_')}.pptx",
+            "slides": slides_ast,
+            "original_slides": original_ast,
+            "slide_count": len(slides_ast),
         }
     except HTTPException:
         raise

@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion, HTMLMotionProps } from 'framer-motion';
 
-export interface ButtonProps extends HTMLMotionProps<'button'> {
+export interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'children'> {
+  children?: React.ReactNode;
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;

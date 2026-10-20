@@ -96,6 +96,25 @@ class SlideDecompiler:
             }
         }
 
+        # Safe color extraction helpers
+        fill_hex = None
+        try:
+            if shape.fill and shape.fill.type == 1 and hasattr(shape.fill, "fore_color"):
+                fill_hex = f"#{shape.fill.fore_color.rgb}"
+        except Exception:
+            pass
+        if fill_hex:
+            base_data["fill_color"] = fill_hex
+
+        line_hex = None
+        try:
+            if shape.line and hasattr(shape.line, "color") and hasattr(shape.line.color, "rgb"):
+                line_hex = f"#{shape.line.color.rgb}"
+        except Exception:
+            pass
+        if line_hex:
+            base_data["line_color"] = line_hex
+
         # 1. Text Container Frame
         if shape.has_text_frame:
             paragraphs = []
@@ -104,10 +123,26 @@ class SlideDecompiler:
                 if "Font Guidance" in txt or "Do not change the template" in txt:
                     continue
 
+                font_color = None
+                try:
+                    if p.font and hasattr(p.font, "color") and hasattr(p.font.color, "rgb"):
+                        font_color = f"#{p.font.color.rgb}"
+                except Exception:
+                    pass
+
+                font_name = None
+                try:
+                    if p.font and p.font.name:
+                        font_name = p.font.name
+                except Exception:
+                    pass
+
                 paragraphs.append({
                     "text": p.text,
                     "level": p.level,
                     "font_size": p.font.size.pt if p.font and p.font.size else 12,
+                    "font_face": font_name,
+                    "font_color": font_color,
                     "bold": p.font.bold if p.font else False,
                     "italic": p.font.italic if p.font else False,
                     "underline": p.font.underline if p.font else False,
@@ -116,6 +151,11 @@ class SlideDecompiler:
                 })
             base_data["type"] = "TEXT_CONTAINER"
             base_data["paragraphs"] = paragraphs
+            if shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE:
+                try:
+                    base_data["shape_name"] = str(shape.auto_shape_type)
+                except Exception:
+                    pass
             return base_data
 
         # 2. Picture / Image Shape
