@@ -6,11 +6,14 @@ from typing import Dict, List, Any, Optional, Generator, Tuple
 
 try:
     from brandmorph.engine.archetype_engine import SlideGraphClassifier
-except ImportError:
+except Exception:
     try:
         from .brandmorph.engine.archetype_engine import SlideGraphClassifier
-    except ImportError:
-        SlideGraphClassifier = None
+    except Exception:
+        try:
+            from backend.brandmorph.engine.archetype_engine import SlideGraphClassifier
+        except Exception:
+            SlideGraphClassifier = None
 
 # Minimum dimension in inches to avoid zero-division / negative-extent bugs
 _MIN_EXTENT = 0.05
@@ -295,13 +298,15 @@ class SlideDecompiler:
             return base_data
 
         # 5. Tables
-        if shape_type == MSO_SHAPE_TYPE.TABLE or hasattr(shape, "table"):
+        is_table = shape_type == MSO_SHAPE_TYPE.TABLE or getattr(shape, "has_table", False)
+        if is_table:
             base_data["type"] = "TABLE"
             base_data["shape_name"] = "TABLE_SHAPE"
             return base_data
 
         # 6. Charts
-        if shape_type == MSO_SHAPE_TYPE.CHART:
+        is_chart = shape_type == MSO_SHAPE_TYPE.CHART or getattr(shape, "has_chart", False)
+        if is_chart:
             base_data["type"] = "CHART"
             base_data["shape_name"] = "CHART_SHAPE"
             return base_data

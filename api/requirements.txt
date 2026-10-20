@@ -3,6 +3,9 @@ uvicorn
 python-pptx
 python-multipart
 pydantic
+pydantic-settings
 httpx
 lxml
 pillow
+PyYAML
+
