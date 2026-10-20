@@ -321,7 +321,38 @@ class ArchetypeEngine:
         self.dna = dna
         self.report = report
 
+    @staticmethod
+    def _scale_shape_recursive(shape, sx: float, sy: float) -> None:
+        try:
+            if shape.left is not None:
+                shape.left = int(shape.left * sx)
+            if shape.top is not None:
+                shape.top = int(shape.top * sy)
+            if shape.width is not None:
+                shape.width = int(shape.width * sx)
+            if shape.height is not None:
+                shape.height = int(shape.height * sy)
+        except Exception:
+            pass
+        if getattr(shape, "shape_type", None) == MSO_SHAPE_TYPE.GROUP or hasattr(shape, "shapes"):
+            try:
+                for child in shape.shapes:
+                    ArchetypeEngine._scale_shape_recursive(child, sx, sy)
+            except Exception:
+                pass
+
     def run(self, prs: pptx.Presentation) -> None:
+        orig_w = prs.slide_width.inches if prs.slide_width else 13.333
+        orig_h = prs.slide_height.inches if prs.slide_height else 7.5
+        if abs(orig_w - 13.333) > 0.1 or abs(orig_h - 7.5) > 0.1:
+            sx = 13.333 / orig_w
+            sy = 7.5 / orig_h
+            prs.slide_width = Inches(13.333)
+            prs.slide_height = Inches(7.5)
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    self._scale_shape_recursive(shape, sx, sy)
+
         total_slides = len(prs.slides)
         for idx, slide in enumerate(prs.slides):
             archetype = SlideGraphClassifier.classify(slide, idx, total_slides)
@@ -389,19 +420,22 @@ class ArchetypeEngine:
         title_shape = None
         subtitle_shape = None
 
-        # 1. Placeholders first
+        # 1. Placeholders first (verify it is not empty or purely numeric)
         for shape in slide.shapes:
             if getattr(shape, "is_placeholder", False):
                 try:
                     pt = shape.placeholder_format.type
                     if pt in (PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.CENTER_TITLE):
-                        title_shape = shape
+                        if shape.has_text_frame:
+                            t_txt = shape.text_frame.text.strip()
+                            if len(t_txt) >= 2 and not t_txt.isdigit() and not t_txt.lstrip("#").strip().isdigit():
+                                title_shape = shape
                     elif pt == PP_PLACEHOLDER.SUBTITLE:
                         subtitle_shape = shape
                 except Exception:
                     pass
 
-        # 2. Heuristics if not found via placeholder
+        # 2. Smart heuristics if not found via placeholder
         if not title_shape:
             candidate_titles = []
             for shape in slide.shapes:
@@ -410,22 +444,37 @@ class ArchetypeEngine:
                 name = (getattr(shape, "name", "") or "").lower()
                 if "brandmorph" in name:
                     continue
-                top_in = shape.top.inches if shape.top else 99.0
                 txt = shape.text_frame.text.strip()
-                if not txt:
+                # Do NOT misclassify short decorative numbers ("01", "02", "1", "#1", page numbers, or <= 2 char strings)
+                if len(txt) < 3 or txt.isdigit() or txt.lstrip("#").strip().isdigit():
                     continue
+                top_in = shape.top.inches if shape.top else 99.0
+                if top_in >= 3.5:
+                    continue
+
                 max_pt = 0.0
                 for p in shape.text_frame.paragraphs:
                     for r in p.runs:
                         if r.font and r.font.size and r.font.size.pt:
                             max_pt = max(max_pt, r.font.size.pt)
-                candidate_titles.append((top_in, -max_pt, shape))
+                if max_pt == 0.0:
+                    max_pt = 14.0
+
+                # Score: font_size * 2.0 - top_inches * 3.0
+                score = max_pt * 2.0 - top_in * 3.0
+                candidate_titles.append((score, top_in, shape))
 
             if candidate_titles:
-                candidate_titles.sort(key=lambda item: (item[0], item[1]))
+                candidate_titles.sort(key=lambda item: item[0], reverse=True)
                 title_shape = candidate_titles[0][2]
-                if len(candidate_titles) > 1 and candidate_titles[1][0] < 4.0:
-                    subtitle_shape = candidate_titles[1][2]
+                title_top = title_shape.top.inches if title_shape.top else 0.0
+                for c in candidate_titles[1:]:
+                    c_shape = c[2]
+                    c_top = c[1]
+                    c_txt = c_shape.text_frame.text.strip()
+                    if 0 < (c_top - title_top) <= 2.2 and len(c_txt) <= 80:
+                        subtitle_shape = c_shape
+                        break
 
         return title_shape, subtitle_shape
 
@@ -568,12 +617,12 @@ class ArchetypeEngine:
                     self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
 
             else:
-                # Content slides: ALWAYS snap title to Top-Left anchor: left=0.65", top=0.38", width=10.4", height=0.75"
+                # Content slides: ALWAYS snap title to Top-Left anchor: left=0.80", top=0.45", width=10.2", height=0.85"
                 try:
-                    title_shape.left = Inches(0.65)
-                    title_shape.top = Inches(0.38)
-                    title_shape.width = Inches(10.4)
-                    title_shape.height = Inches(0.75)
+                    title_shape.left = Inches(0.80)
+                    title_shape.top = Inches(0.45)
+                    title_shape.width = Inches(10.2)
+                    title_shape.height = Inches(0.85)
                 except Exception:
                     pass
                 for p in tf.paragraphs:
@@ -595,6 +644,22 @@ class ArchetypeEngine:
                         r.font.color.rgb = t_rgb
                         self._inject_run_xml(r, "Times New Roman", t_hex)
                     self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
+
+                # Collision Prevention: Any non-title shape whose top < 1.40" shifted down to >= 1.45"
+                for s in slide.shapes:
+                    if s == title_shape:
+                        continue
+                    s_name = getattr(s, "name", "") or ""
+                    if "BrandMorph" in s_name or "BottomFrame" in s_name or "Logo_Stamp" in s_name:
+                        continue
+                    try:
+                        if hasattr(s, "top") and s.top is not None and s.top.inches < 1.40:
+                            s_h = s.height.inches if hasattr(s, "height") and s.height else 1.0
+                            s.top = Inches(1.45)
+                            if (1.45 + s_h) > 7.10:
+                                s.height = Inches(max(0.5, 7.10 - 1.45))
+                    except Exception:
+                        pass
 
         # ---------------------------------------------------------------------
         # RULE B: Image & Text Reflow (Never Overlap)
@@ -759,11 +824,21 @@ class ArchetypeEngine:
                     ts.top = Inches(top_pos)
                     ts.width = Inches(card_w)
                     ts.height = Inches(card_h)
-                    if hasattr(ts, "fill"):
-                        ts.fill.solid()
-                        ts.fill.fore_color.rgb = RGB_SURFACE_ALT
                 except Exception:
                     pass
+
+        # ---------------------------------------------------------------------
+        # Necessity-First Card & Structural Shape Injection
+        # On content slides, inject backing corporate cards behind loose text blocks
+        # ---------------------------------------------------------------------
+        if archetype in (
+            SlideArchetype.MULTI_CARD_CONTENT,
+            SlideArchetype.AGENDA_SLIDE,
+            SlideArchetype.SECTION_SPLITTER,
+            SlideArchetype.PROCESS_TIMELINE,
+        ):
+            for ts in content_text_shapes:
+                self._inject_necessity_card_if_needed(slide, ts)
 
         # ---------------------------------------------------------------------
         # RULES C & D: Typography & Contrast Enforcement on All Shapes
@@ -774,6 +849,85 @@ class ArchetypeEngine:
             self._govern_shape_typography_and_contrast(
                 shape, slide_idx, title_shape, subtitle_shape, archetype, default_bg=HEX_CANVAS_NAVY
             )
+
+    def _inject_necessity_card_if_needed(self, slide, ts, slide_w: float = 13.333, slide_h: float = 7.5) -> None:
+        try:
+            t_l = ts.left.inches if ts.left else 0.8
+            t_t = ts.top.inches if ts.top else 1.65
+            t_w = ts.width.inches if ts.width else 3.5
+            t_h = ts.height.inches if ts.height else 2.5
+            t_area = max(0.01, t_w * t_h)
+
+            # 1. Necessity Check: Is ts visually enclosed inside a non-background shape/card (> 60% area)?
+            enclosed = False
+            for s in slide.shapes:
+                if s == ts or s.has_text_frame or getattr(s, "has_table", False):
+                    continue
+                s_name = getattr(s, "name", "") or ""
+                if "BrandMorph" in s_name or "BottomFrame" in s_name or "Logo_Stamp" in s_name:
+                    continue
+                s_w = s.width.inches if s.width else 0.0
+                s_h = s.height.inches if s.height else 0.0
+                if s_w >= (slide_w - 0.5) and s_h >= (slide_h - 0.5):
+                    continue
+                s_l = s.left.inches if s.left else 0.0
+                s_t = s.top.inches if s.top else 0.0
+
+                ix1 = max(t_l, s_l)
+                iy1 = max(t_t, s_t)
+                ix2 = min(t_l + t_w, s_l + s_w)
+                iy2 = min(t_t + t_h, s_t + s_h)
+                if ix2 > ix1 and iy2 > iy1:
+                    inter_area = (ix2 - ix1) * (iy2 - iy1)
+                    if (inter_area / t_area) > 0.60:
+                        enclosed = True
+                        break
+
+            if enclosed:
+                return
+
+            # 2. Dynamic Card Creation (When Needed)
+            card = slide.shapes.add_shape(
+                MSO_SHAPE.ROUNDED_RECTANGLE,
+                Inches(t_l), Inches(t_t), Inches(t_w), Inches(t_h)
+            )
+            card.name = "BrandMorphInjectedCard"
+            card.fill.solid()
+            card.fill.fore_color.rgb = RGBColor(8, 30, 54)  # #081E36
+            if hasattr(card, "line") and card.line:
+                card.line.color.rgb = RGBColor(20, 48, 95)  # 1pt #14305F
+                card.line.width = Pt(1.0)
+
+            # Thin Gold top accent bar (0.06" height)
+            accent = slide.shapes.add_shape(
+                MSO_SHAPE.RECTANGLE,
+                Inches(t_l), Inches(t_t), Inches(t_w), Inches(0.06)
+            )
+            accent.name = "BrandMorphCardAccent"
+            accent.fill.solid()
+            accent.fill.fore_color.rgb = RGB_CORP_GOLD
+            if hasattr(accent, "line") and accent.line:
+                accent.line.fill.background()
+
+            # CRITICAL Z-ORDER: Move card and accent behind ts in spTree
+            spTree = slide.shapes._spTree
+            spTree.remove(card._element)
+            ts_idx = list(spTree).index(ts._element)
+            spTree.insert(ts_idx, card._element)
+
+            spTree.remove(accent._element)
+            ts_idx = list(spTree).index(ts._element)
+            spTree.insert(ts_idx, accent._element)
+
+            # Set internal padding on the text frame: left + 0.22", top + 0.18", width - 0.44", height - 0.32"
+            ts.left = Inches(t_l + 0.22)
+            ts.top = Inches(t_t + 0.18)
+            ts.width = Inches(max(0.5, t_w - 0.44))
+            ts.height = Inches(max(0.4, t_h - 0.32))
+            if hasattr(ts, "fill"):
+                ts.fill.background()
+        except Exception:
+            pass
 
     def _style_table_corporate(self, table) -> None:
         """Enforce clean corporate Table styling per task specifications."""

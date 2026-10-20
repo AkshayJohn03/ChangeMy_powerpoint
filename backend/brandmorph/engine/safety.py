@@ -84,7 +84,8 @@ def validate_deck(path: str | Path, *, max_total: int | None = None,
         total = 0
         for info in zf.infolist():
             name = info.filename
-            if name.startswith("/") or "\\" in name or ".." in Path(name).parts:
+            norm_name = name.replace("\\", "/")
+            if norm_name.startswith("/") or ".." in Path(norm_name).parts or Path(norm_name).is_absolute():
                 raise UnsafeDeckError(f"unsafe entry path: {name!r} (zip-slip)")
             declared = info.file_size
             total += declared

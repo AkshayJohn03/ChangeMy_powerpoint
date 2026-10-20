@@ -30,10 +30,16 @@ def _color_to_hex(color_obj) -> Optional[str]:
     return None
 
 class SlideDecompiler:
-    def __init__(self, pptx_path: str):
+    def __init__(self, pptx_path: str, raw_mode: bool = False):
+        self.raw_mode = raw_mode
         self.prs = pptx.Presentation(pptx_path)
-        self.slide_width = self.prs.slide_width.inches if self.prs.slide_width else 13.333
-        self.slide_height = self.prs.slide_height.inches if self.prs.slide_height else 7.5
+        self.orig_width = self.prs.slide_width.inches if self.prs.slide_width else 13.333
+        self.orig_height = self.prs.slide_height.inches if self.prs.slide_height else 7.5
+        # Standardize stage coordinate system to 13.333 x 7.5
+        self.slide_width = 13.333
+        self.slide_height = 7.5
+        self.scale_x = 13.333 / self.orig_width if self.orig_width > 0 else 1.0
+        self.scale_y = 7.5 / self.orig_height if self.orig_height > 0 else 1.0
 
     @staticmethod
     def _iter_shapes(
@@ -54,6 +60,52 @@ class SlideDecompiler:
                 )
             else:
                 yield shape, parent_left, parent_top
+
+    def _extract_slide_bg_color(self, slide) -> str:
+        default_hex = "#FFFFFF" if self.raw_mode else "#001F33"
+        try:
+            # 1. Slide background
+            if slide.background and slide.background.fill:
+                fill = slide.background.fill
+                if fill.type == MSO_FILL.SOLID and hasattr(fill, "fore_color"):
+                    c = _color_to_hex(fill.fore_color)
+                    if c:
+                        return c
+            # 2. Slide layout background
+            if hasattr(slide, "slide_layout") and slide.slide_layout:
+                layout = slide.slide_layout
+                if layout.background and layout.background.fill:
+                    fill = layout.background.fill
+                    if fill.type == MSO_FILL.SOLID and hasattr(fill, "fore_color"):
+                        c = _color_to_hex(fill.fore_color)
+                        if c:
+                            return c
+            # 3. Slide master background
+            if hasattr(slide, "slide_layout") and hasattr(slide.slide_layout, "slide_master"):
+                master = slide.slide_layout.slide_master
+                if master and master.background and master.background.fill:
+                    fill = master.background.fill
+                    if fill.type == MSO_FILL.SOLID and hasattr(fill, "fore_color"):
+                        c = _color_to_hex(fill.fore_color)
+                        if c:
+                            return c
+            # 4. Check for full-bleed background shape on slide
+            for shp in slide.shapes:
+                try:
+                    s_left = shp.left.inches if shp.left is not None else 0.0
+                    s_top = shp.top.inches if shp.top is not None else 0.0
+                    s_w = shp.width.inches if shp.width is not None else 0.0
+                    s_h = shp.height.inches if shp.height is not None else 0.0
+                    if s_left <= 0.2 and s_top <= 0.2 and s_w >= (self.orig_width - 0.5) and s_h >= (self.orig_height - 0.5):
+                        if shp.fill and shp.fill.type == MSO_FILL.SOLID and hasattr(shp.fill, "fore_color"):
+                            c = _color_to_hex(shp.fill.fore_color)
+                            if c:
+                                return c
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return default_hex
 
     def parse_deck(self) -> List[Dict[str, Any]]:
         parsed_slides = []
@@ -95,18 +147,21 @@ class SlideDecompiler:
 
             full_text = " ".join(slide_text_accumulator)
 
-            archetype_name = "Multi-Card Content"
-            if SlideGraphClassifier:
+            archetype_name = "Original Deck" if self.raw_mode else "Multi-Card Content"
+            if not self.raw_mode and SlideGraphClassifier:
                 try:
                     archetype = SlideGraphClassifier.classify(slide, index, len(self.prs.slides))
                     archetype_name = archetype.value
                 except Exception:
                     pass
 
+            bg_color = self._extract_slide_bg_color(slide)
+
             slide_ast = {
                 "slide_id": index + 1,
                 "archetype": archetype_name,
                 "dimensions": {"width": self.slide_width, "height": self.slide_height},
+                "background_color": bg_color,
                 "full_text": full_text,
                 "bg_image": bg_image_base64,
                 "nodes": nodes
@@ -119,275 +174,315 @@ class SlideDecompiler:
         self, shape, offset_left: float = 0.0, offset_top: float = 0.0
     ) -> Dict[str, Any] | None:
         try:
-            left = max(0.0, round((shape.left.inches if shape.left else 0.5) + offset_left, 3))
-            top = max(0.0, round((shape.top.inches if shape.top else 0.5) + offset_top, 3))
-            width = max(_MIN_EXTENT, round(shape.width.inches if shape.width else 2.0, 3))
-            height = max(_MIN_EXTENT, round(shape.height.inches if shape.height else 1.0, 3))
-        except Exception:
-            left, top, width, height = 0.5, 0.5, 2.0, 1.0
+            try:
+                raw_left = (shape.left.inches if shape.left is not None else 0.5) + offset_left
+                raw_top = (shape.top.inches if shape.top is not None else 0.5) + offset_top
+                raw_width = shape.width.inches if shape.width is not None else 2.0
+                raw_height = shape.height.inches if shape.height is not None else 1.0
 
-        shape_id = getattr(shape, "shape_id", 0)
-        shape_type = getattr(shape, "shape_type", None)
+                left = max(0.0, round(raw_left * self.scale_x, 3))
+                top = max(0.0, round(raw_top * self.scale_y, 3))
+                width = max(_MIN_EXTENT, round(raw_width * self.scale_x, 3))
+                height = max(_MIN_EXTENT, round(raw_height * self.scale_y, 3))
+            except Exception:
+                left, top, width, height = 0.5, 0.5, 2.0, 1.0
 
-        shape_name_str = getattr(shape, "name", "") or ""
-        base_data: Dict[str, Any] = {
-            "id": shape_id,
-            "name": shape_name_str,
-            "x": left,
-            "y": top,
-            "w": width,
-            "h": height,
-            "bbox": {
-                "left": left,
-                "top": top,
-                "width": width,
-                "height": height
+            shape_id = getattr(shape, "shape_id", 0)
+            shape_type = getattr(shape, "shape_type", None)
+
+            shape_name_str = getattr(shape, "name", "") or ""
+            base_data: Dict[str, Any] = {
+                "id": shape_id,
+                "name": shape_name_str,
+                "x": left,
+                "y": top,
+                "w": width,
+                "h": height,
+                "bbox": {
+                    "left": left,
+                    "top": top,
+                    "width": width,
+                    "height": height
+                }
             }
-        }
 
-        # Fill and Line properties
-        fill_hex = None
-        try:
-            if shape.fill and shape.fill.type == MSO_FILL.SOLID and hasattr(shape.fill, "fore_color"):
-                fill_hex = _color_to_hex(shape.fill.fore_color)
-        except Exception:
-            pass
-        if fill_hex:
-            base_data["fill_hex"] = fill_hex
-            base_data["fill_color"] = fill_hex
-
-        line_hex = None
-        try:
-            if shape.line and hasattr(shape.line, "color") and hasattr(shape.line.color, "rgb"):
-                line_hex = _color_to_hex(shape.line.color)
-        except Exception:
-            pass
-        if line_hex:
-            base_data["line_hex"] = line_hex
-            base_data["line_color"] = line_hex
-
-        # Check for bottom frame
-        if "BrandMorphBottomFrame" in shape_name_str or "BrandMorphAccentLine" in shape_name_str:
-            base_data["type"] = "RECTANGLE_SHAPE"
-            base_data["shape_name"] = "BrandMorphBottomFrame"
-            return base_data
-
-        # 1. Check for Picture / Image FIRST (so picture placeholders are not swallowed by has_text_frame)
-        is_picture = False
-        image_bytes = None
-        content_type = "image/png"
-        try:
-            if shape_type == MSO_SHAPE_TYPE.PICTURE or hasattr(shape, "image"):
-                if getattr(shape, "image", None) is not None:
-                    is_picture = True
-                    image_bytes = shape.image.blob
-                    content_type = getattr(shape.image, "content_type", None) or f"image/{getattr(shape.image, 'ext', 'png')}"
-        except Exception:
-            pass
-
-        if not is_picture:
+            # Fill and Line properties
+            fill_hex = None
             try:
-                # Check for picture placeholder or blip in shape element
-                blips = shape.element.xpath('.//a:blip')
-                if blips:
-                    r_id = blips[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                    if r_id and hasattr(shape, "part") and r_id in shape.part.related_parts:
-                        rel = shape.part.related_parts[r_id]
-                        if hasattr(rel, "blob"):
-                            image_bytes = rel.blob
-                            content_type = getattr(rel, "content_type", "image/png")
-                            is_picture = True
+                if shape.fill and shape.fill.type == MSO_FILL.SOLID and hasattr(shape.fill, "fore_color"):
+                    fill_hex = _color_to_hex(shape.fill.fore_color)
             except Exception:
                 pass
+            if fill_hex:
+                base_data["fill_hex"] = fill_hex
+                base_data["fill_color"] = fill_hex
 
-        if is_picture and image_bytes:
+            line_hex = None
             try:
-                image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-                data_uri = f"data:{content_type};base64,{image_base64}"
-                base_data["type"] = "PICTURE"
-                base_data["image_data_uri"] = data_uri
-                base_data["image_src"] = data_uri
-                base_data["image_data"] = data_uri
-                base_data["image_data_uri"] = data_uri
+                if shape.line and hasattr(shape.line, "color") and hasattr(shape.line.color, "rgb"):
+                    line_hex = _color_to_hex(shape.line.color)
+            except Exception:
+                pass
+            if line_hex:
+                base_data["line_hex"] = line_hex
+                base_data["line_color"] = line_hex
+
+            # Check for bottom frame
+            if "BrandMorphBottomFrame" in shape_name_str or "BrandMorphAccentLine" in shape_name_str:
+                base_data["type"] = "RECTANGLE_SHAPE"
+                base_data["shape_name"] = "BrandMorphBottomFrame"
                 return base_data
+
+            # 1. Check for Picture / Image FIRST (so picture placeholders are not swallowed by has_text_frame)
+            is_picture = False
+            image_bytes = None
+            content_type = "image/png"
+            try:
+                if shape_type == MSO_SHAPE_TYPE.PICTURE or hasattr(shape, "image"):
+                    if getattr(shape, "image", None) is not None:
+                        is_picture = True
+                        image_bytes = shape.image.blob
+                        content_type = getattr(shape.image, "content_type", None) or f"image/{getattr(shape.image, 'ext', 'png')}"
             except Exception:
                 pass
 
-        # 2. Text Container Frame
-        if getattr(shape, "has_text_frame", False) and shape.text_frame and shape.text_frame.text.strip():
-            paragraphs = []
-            is_title_frame = (
-                (getattr(shape, "is_placeholder", False) and getattr(shape, "placeholder_format", None) and shape.placeholder_format.type in (1, 3))
-                or "title" in (getattr(shape, "name", "") or "").lower()
-                or (top < 1.8 and height < 2.0)
-            )
-
-            for p in shape.text_frame.paragraphs:
-                txt = p.text.strip()
-                if "Font Guidance" in txt or "Do not change the template" in txt:
-                    continue
-
-                runs_data = []
-                for r in p.runs:
-                    r_color = None
-                    try:
-                        if r.font and r.font.color and r.font.color.type is not None:
-                            r_color = _color_to_hex(r.font.color)
-                    except Exception:
-                        pass
-                    runs_data.append({
-                        "text": r.text,
-                        "font_name": r.font.name if r.font else None,
-                        "font_size": r.font.size.pt if r.font and r.font.size else None,
-                        "bold": bool(r.font.bold) if r.font else False,
-                        "italic": bool(r.font.italic) if r.font else False,
-                        "color": r_color,
-                    })
-
-                p_align = 'LEFT'
+            if not is_picture:
                 try:
-                    if str(p.alignment) == 'CENTER (2)':
-                        p_align = 'CENTER'
-                    elif str(p.alignment) == 'RIGHT (3)':
-                        p_align = 'RIGHT'
-                    elif str(p.alignment) == 'JUSTIFY (4)':
-                        p_align = 'JUSTIFY'
+                    # Check for picture placeholder or blip in shape element
+                    blips = shape.element.xpath('.//a:blip')
+                    if blips:
+                        r_id = blips[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                        if r_id and hasattr(shape, "part") and r_id in shape.part.related_parts:
+                            rel = shape.part.related_parts[r_id]
+                            if hasattr(rel, "blob"):
+                                image_bytes = rel.blob
+                                content_type = getattr(rel, "content_type", "image/png")
+                                is_picture = True
                 except Exception:
                     pass
 
-                font_color = "#FFB81C" if is_title_frame else "#FFFFFF"
-                font_name = "Times New Roman" if is_title_frame else "Arial"
-                font_size = p.font.size.pt if p.font and p.font.size else (28.0 if is_title_frame else 12.0)
+            if is_picture and image_bytes:
+                try:
+                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                    data_uri = f"data:{content_type};base64,{image_base64}"
+                    base_data["type"] = "PICTURE"
+                    base_data["image_data_uri"] = data_uri
+                    base_data["image_src"] = data_uri
+                    base_data["image_data"] = data_uri
+                    return base_data
+                except Exception:
+                    pass
 
-                paragraphs.append({
-                    "text": p.text,
-                    "level": getattr(p, "level", 0),
-                    "font_size": font_size,
-                    "font_face": font_name,
-                    "font_color": font_color,
-                    "bold": False if is_title_frame else (bool(p.font.bold) if p.font else False),
-                    "italic": bool(p.font.italic) if p.font else False,
-                    "underline": bool(p.font.underline) if p.font else False,
-                    "align": p_align,
-                    "runs": runs_data
-                })
+            # 2. Text Container Frame
+            if getattr(shape, "has_text_frame", False) and shape.text_frame and shape.text_frame.text.strip():
+                paragraphs = []
+                is_title_frame = (
+                    (getattr(shape, "is_placeholder", False) and getattr(shape, "placeholder_format", None) and shape.placeholder_format.type in (1, 3))
+                    or "title" in (getattr(shape, "name", "") or "").lower()
+                    or (top < 1.8 and height < 2.0)
+                )
 
-            base_data["type"] = "TEXT_CONTAINER"
-            base_data["paragraphs"] = paragraphs
-            base_data["is_title"] = is_title_frame
-            return base_data
+                for p in shape.text_frame.paragraphs:
+                    txt = p.text.strip()
+                    if not self.raw_mode and ("Font Guidance" in txt or "Do not change the template" in txt):
+                        continue
 
-        # 3. Geometric Shapes / Arrows / Containers
-        if shape_type in (MSO_SHAPE_TYPE.AUTO_SHAPE, MSO_SHAPE_TYPE.FREEFORM):
-            shape_enum_str = str(getattr(shape, 'auto_shape_type', 'RECTANGLE'))
-            if "ARROW" in shape_enum_str or "CHEVRON" in shape_enum_str:
-                base_data["type"] = "ARROW_SHAPE"
-            elif "OVAL" in shape_enum_str or "CIRCLE" in shape_enum_str:
-                base_data["type"] = "OVAL_SHAPE"
-            else:
-                base_data["type"] = "RECTANGLE_SHAPE"
+                    runs_data = []
+                    first_run_color = None
+                    first_run_font = None
+                    first_run_size = None
+                    first_run_bold = None
+                    first_run_italic = None
 
-            base_data["shape_name"] = shape_enum_str
-            return base_data
-
-        # 4. Lines and Connectors
-        tag = getattr(shape, "_element", None)
-        is_connector = tag is not None and getattr(tag, "tag", "").endswith("}cxnSp")
-        if shape_type == MSO_SHAPE_TYPE.LINE or is_connector:
-            base_data["type"] = "LINE_SHAPE"
-            base_data["shape_name"] = "CONNECTOR_LINE" if is_connector else "LINE"
-            return base_data
-
-        # 5. Tables
-        is_table = shape_type == MSO_SHAPE_TYPE.TABLE or getattr(shape, "has_table", False)
-        if is_table:
-            base_data["type"] = "TABLE"
-            base_data["shape_name"] = "TABLE_SHAPE"
-            try:
-                table = shape.table
-                rows_data = []
-                total_w = sum(col.width.inches for col in table.columns if col.width) if table.columns else 0.0
-                if total_w > 0:
-                    col_widths = [round((col.width.inches / total_w) * 100, 1) for col in table.columns]
-                else:
-                    n_cols = len(table.columns) if table.columns else 1
-                    col_widths = [round(100.0 / n_cols, 1)] * n_cols
-
-                for r_idx, row in enumerate(table.rows):
-                    row_cells = []
-                    for c_idx, cell in enumerate(row.cells):
-                        text = cell.text.strip() if cell.text else ""
-
-                        # Extract cell fill
-                        fill_color = None
+                    for r in p.runs:
+                        r_color = None
                         try:
-                            if cell.fill and cell.fill.type == 1 and hasattr(cell.fill, "fore_color"):
-                                fill_color = f"#{str(cell.fill.fore_color.rgb)}".upper()
+                            if r.font and r.font.color and r.font.color.type is not None:
+                                r_color = _color_to_hex(r.font.color)
                         except Exception:
                             pass
-                        if not fill_color:
-                            fill_color = "#FFB81C" if r_idx == 0 else ("#081E36" if r_idx % 2 == 1 else "#030C1E")
+                        if r_color and not first_run_color:
+                            first_run_color = r_color
+                        if r.font and r.font.name and not first_run_font:
+                            first_run_font = r.font.name
+                        if r.font and r.font.size and r.font.size.pt and not first_run_size:
+                            first_run_size = r.font.size.pt
+                        if r.font and r.font.bold is not None and first_run_bold is None:
+                            first_run_bold = bool(r.font.bold)
+                        if r.font and r.font.italic is not None and first_run_italic is None:
+                            first_run_italic = bool(r.font.italic)
 
-                        # Extract cell text styling
-                        text_color = None
-                        bold = (r_idx == 0 or c_idx == 0)
-                        font_size = 12.0 if r_idx == 0 else 11.0
-                        align = "left"
+                        runs_data.append({
+                            "text": r.text,
+                            "font_name": r.font.name if r.font else None,
+                            "font_size": r.font.size.pt if r.font and r.font.size else None,
+                            "bold": bool(r.font.bold) if r.font else False,
+                            "italic": bool(r.font.italic) if r.font else False,
+                            "color": r_color,
+                        })
 
-                        if cell.text_frame and cell.text_frame.paragraphs:
-                            p0 = cell.text_frame.paragraphs[0]
-                            if p0.alignment == PP_ALIGN.CENTER:
-                                align = "center"
-                            elif p0.alignment == PP_ALIGN.RIGHT:
-                                align = "right"
-                            else:
-                                align = "left"
+                    p_align = 'LEFT'
+                    try:
+                        if str(p.alignment) == 'CENTER (2)':
+                            p_align = 'CENTER'
+                        elif str(p.alignment) == 'RIGHT (3)':
+                            p_align = 'RIGHT'
+                        elif str(p.alignment) == 'JUSTIFY (4)':
+                            p_align = 'JUSTIFY'
+                    except Exception:
+                        pass
 
-                            for p in cell.text_frame.paragraphs:
-                                for r in p.runs:
-                                    if r.font:
-                                        if r.font.bold is not None:
-                                            bold = r.font.bold
-                                        if r.font.size and r.font.size.pt:
-                                            font_size = r.font.size.pt
-                                        if r.font.color and r.font.color.type == 1:
-                                            try:
-                                                text_color = f"#{str(r.font.color.rgb)}".upper()
-                                            except Exception:
-                                                pass
+                    if self.raw_mode:
+                        p_color = _color_to_hex(p.font.color) if (p.font and hasattr(p.font, "color")) else None
+                        font_color = first_run_color or p_color or "#111827"
+                        font_name = first_run_font or (p.font.name if p.font else None) or "Calibri"
+                        font_size = first_run_size or (p.font.size.pt if p.font and p.font.size else (28.0 if is_title_frame else 14.0))
+                        bold = bool(p.font.bold) if (p.font and p.font.bold is not None) else (first_run_bold or False)
+                        italic = bool(p.font.italic) if (p.font and p.font.italic is not None) else (first_run_italic or False)
+                    else:
+                        font_color = "#FFB81C" if is_title_frame else "#FFFFFF"
+                        font_name = "Times New Roman" if is_title_frame else "Arial"
+                        font_size = p.font.size.pt if p.font and p.font.size else (28.0 if is_title_frame else 12.0)
+                        bold = False if is_title_frame else (bool(p.font.bold) if p.font else False)
+                        italic = bool(p.font.italic) if p.font else False
+
+                    paragraphs.append({
+                        "text": p.text,
+                        "level": getattr(p, "level", 0),
+                        "font_size": font_size,
+                        "font_face": font_name,
+                        "font_color": font_color,
+                        "bold": bold,
+                        "italic": italic,
+                        "underline": bool(p.font.underline) if p.font else False,
+                        "align": p_align,
+                        "runs": runs_data
+                    })
+
+                base_data["type"] = "TEXT_CONTAINER"
+                base_data["paragraphs"] = paragraphs
+                base_data["is_title"] = is_title_frame
+                return base_data
+
+            # 3. Geometric Shapes / Arrows / Containers
+            if shape_type in (MSO_SHAPE_TYPE.AUTO_SHAPE, MSO_SHAPE_TYPE.FREEFORM):
+                shape_enum_str = str(getattr(shape, 'auto_shape_type', 'RECTANGLE'))
+                if "ARROW" in shape_enum_str or "CHEVRON" in shape_enum_str:
+                    base_data["type"] = "ARROW_SHAPE"
+                elif "OVAL" in shape_enum_str or "CIRCLE" in shape_enum_str:
+                    base_data["type"] = "OVAL_SHAPE"
+                else:
+                    base_data["type"] = "RECTANGLE_SHAPE"
+
+                base_data["shape_name"] = shape_enum_str
+                return base_data
+
+            # 4. Lines and Connectors
+            tag = getattr(shape, "_element", None)
+            is_connector = tag is not None and getattr(tag, "tag", "").endswith("}cxnSp")
+            if shape_type == MSO_SHAPE_TYPE.LINE or is_connector:
+                base_data["type"] = "LINE_SHAPE"
+                base_data["shape_name"] = "CONNECTOR_LINE" if is_connector else "LINE"
+                return base_data
+
+            # 5. Tables
+            is_table = shape_type == MSO_SHAPE_TYPE.TABLE or getattr(shape, "has_table", False)
+            if is_table:
+                base_data["type"] = "TABLE"
+                base_data["shape_name"] = "TABLE_SHAPE"
+                try:
+                    table = shape.table
+                    rows_data = []
+                    total_w = sum(col.width.inches for col in table.columns if col.width) if table.columns else 0.0
+                    if total_w > 0:
+                        col_widths = [round((col.width.inches / total_w) * 100, 1) for col in table.columns]
+                    else:
+                        n_cols = len(table.columns) if table.columns else 1
+                        col_widths = [round(100.0 / n_cols, 1)] * n_cols
+
+                    for r_idx, row in enumerate(table.rows):
+                        row_cells = []
+                        for c_idx, cell in enumerate(row.cells):
+                            text = cell.text.strip() if cell.text else ""
+
+                            # Extract cell fill
+                            fill_color = None
+                            try:
+                                if cell.fill and cell.fill.type == 1 and hasattr(cell.fill, "fore_color"):
+                                    fill_color = f"#{str(cell.fill.fore_color.rgb)}".upper()
+                            except Exception:
+                                pass
+                            if not fill_color:
+                                if self.raw_mode:
+                                    fill_color = "#FFFFFF"
+                                else:
+                                    fill_color = "#FFB81C" if r_idx == 0 else ("#081E36" if r_idx % 2 == 1 else "#030C1E")
+
+                            # Extract cell text styling
+                            text_color = None
+                            bold = (r_idx == 0 or c_idx == 0)
+                            font_size = 12.0 if r_idx == 0 else 11.0
+                            align = "left"
+
+                            if cell.text_frame and cell.text_frame.paragraphs:
+                                p0 = cell.text_frame.paragraphs[0]
+                                if p0.alignment == PP_ALIGN.CENTER:
+                                    align = "center"
+                                elif p0.alignment == PP_ALIGN.RIGHT:
+                                    align = "right"
+                                else:
+                                    align = "left"
+
+                                for p in cell.text_frame.paragraphs:
+                                    for r in p.runs:
+                                        if r.font:
+                                            if r.font.bold is not None:
+                                                bold = r.font.bold
+                                            if r.font.size and r.font.size.pt:
+                                                font_size = r.font.size.pt
+                                            if r.font.color and r.font.color.type == 1:
+                                                try:
+                                                    text_color = f"#{str(r.font.color.rgb)}".upper()
+                                                except Exception:
+                                                    pass
+                                        if text_color:
+                                            break
                                     if text_color:
                                         break
-                                if text_color:
-                                    break
 
-                        if not text_color:
-                            text_color = "#001F33" if r_idx == 0 else ("#FFB81C" if c_idx == 0 else "#FFFFFF")
+                            if not text_color:
+                                if self.raw_mode:
+                                    text_color = "#111827"
+                                else:
+                                    text_color = "#001F33" if r_idx == 0 else ("#FFB81C" if c_idx == 0 else "#FFFFFF")
 
-                        row_cells.append({
-                            "text": text,
-                            "fill_color": fill_color,
-                            "text_color": text_color,
-                            "bold": bold,
-                            "font_size": font_size,
-                            "align": align,
-                        })
-                    rows_data.append(row_cells)
+                            row_cells.append({
+                                "text": text,
+                                "fill_color": fill_color,
+                                "text_color": text_color,
+                                "bold": bold,
+                                "font_size": font_size,
+                                "align": align,
+                            })
+                        rows_data.append(row_cells)
 
-                base_data["table_data"] = {
-                    "rows": rows_data,
-                    "col_widths": col_widths,
-                    "num_rows": len(table.rows),
-                    "num_cols": len(table.columns),
-                }
-            except Exception:
-                pass
-            return base_data
+                    base_data["table_data"] = {
+                        "rows": rows_data,
+                        "col_widths": col_widths,
+                        "num_rows": len(table.rows),
+                        "num_cols": len(table.columns),
+                    }
+                except Exception:
+                    pass
+                return base_data
 
-        # 6. Charts
-        is_chart = shape_type == MSO_SHAPE_TYPE.CHART or getattr(shape, "has_chart", False)
-        if is_chart:
-            base_data["type"] = "CHART"
-            base_data["shape_name"] = "CHART_SHAPE"
-            return base_data
+            # 6. Charts
+            is_chart = shape_type == MSO_SHAPE_TYPE.CHART or getattr(shape, "has_chart", False)
+            if is_chart:
+                base_data["type"] = "CHART"
+                base_data["shape_name"] = "CHART_SHAPE"
+                return base_data
 
-        return None
+            return None
+        except Exception:
+            return None

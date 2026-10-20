@@ -30,6 +30,42 @@ from .safety import validate_deck
 from .theme import transform as transform_theme
 
 
+from pptx.util import Inches
+
+
+def _scale_shape_recursive(shape, sx: float, sy: float) -> None:
+    try:
+        if shape.left is not None:
+            shape.left = int(shape.left * sx)
+        if shape.top is not None:
+            shape.top = int(shape.top * sy)
+        if shape.width is not None:
+            shape.width = int(shape.width * sx)
+        if shape.height is not None:
+            shape.height = int(shape.height * sy)
+    except Exception:
+        pass
+    if getattr(shape, "shape_type", None) == 6 or hasattr(shape, "shapes"):
+        try:
+            for child in shape.shapes:
+                _scale_shape_recursive(child, sx, sy)
+        except Exception:
+            pass
+
+
+def normalize_presentation_dimensions(prs: Presentation) -> None:
+    orig_w = prs.slide_width.inches if prs.slide_width else 13.333
+    orig_h = prs.slide_height.inches if prs.slide_height else 7.5
+    if abs(orig_w - 13.333) > 0.1 or abs(orig_h - 7.5) > 0.1:
+        sx = 13.333 / orig_w
+        sy = 7.5 / orig_h
+        prs.slide_width = Inches(13.333)
+        prs.slide_height = Inches(7.5)
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                _scale_shape_recursive(shape, sx, sy)
+
+
 @dataclass
 class MorphOptions:
     dry_run: bool = False
@@ -55,6 +91,8 @@ class MorphPipeline:
         report.inventory = analyze(source)
 
         prs = Presentation(str(source))
+        # Step 0: Slide Dimension Normalizer (13.333" x 7.5")
+        normalize_presentation_dimensions(prs)
         DirectFormatMapper(self.dna, report).run(prs)
         FontRoleMapper(self.dna, report).run(prs)
         ArchetypeEngine(self.dna, report).run(prs)

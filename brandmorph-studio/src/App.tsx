@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import pptxgen from 'pptxgenjs';
+import JSZip from 'jszip';
 import {
   Upload,
   Download,
@@ -63,6 +64,7 @@ interface SlideAST {
   slide_id: number;
   archetype?: string;
   dimensions: { width: number; height: number };
+  background_color?: string;
   full_text?: string;
   bg_image?: string;
   nodes: ASTNode[];
@@ -154,6 +156,76 @@ function calculateContrastRatio(foregroundHex: string, backgroundHex: string): n
   const lighter = Math.max(l1, l2);
   const darker = Math.min(l1, l2);
   return Number(((lighter + 0.05) / (darker + 0.05)).toFixed(1));
+}
+
+async function optimizePptxMedia(file: File | Blob): Promise<Blob> {
+  // If file <= 3.5 MB, skip optimization
+  if (file.size <= 3.5 * 1024 * 1024) {
+    return file;
+  }
+
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const mediaFiles = Object.keys(zip.files).filter((path) =>
+      /^ppt\/media\/.*\.(png|jpe?g)$/i.test(path)
+    );
+
+    let modified = false;
+
+    for (const path of mediaFiles) {
+      const fileEntry = zip.files[path];
+      const origData = await fileEntry.async('uint8array');
+      // If larger than 300KB
+      if (origData.length > 300 * 1024) {
+        try {
+          const blob = new Blob([origData]);
+          const bitmap = await createImageBitmap(blob);
+
+          const maxDim = 1280;
+          let { width, height } = bitmap;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(bitmap, 0, 0, width, height);
+            const compressedBlob = await new Promise<Blob | null>((resolve) =>
+              canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.78)
+            );
+            if (compressedBlob && compressedBlob.size < origData.length) {
+              const compressedBytes = await compressedBlob.arrayBuffer();
+              zip.file(path, compressedBytes);
+              modified = true;
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not optimize image ${path}:`, e);
+        }
+      }
+    }
+
+    if (modified) {
+      return await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 },
+      });
+    }
+  } catch (err) {
+    console.warn('Media optimization failed, proceeding with original file:', err);
+  }
+
+  return file;
 }
 
 export default function App() {
@@ -257,10 +329,20 @@ export default function App() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      processDeck(file, file.name);
+      try {
+        let fileToSend: Blob = file;
+        if (file.size > 3.5 * 1024 * 1024) {
+          setStatusMessage(`Optimizing media in ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)...`);
+          fileToSend = await optimizePptxMedia(file);
+        }
+        await processDeck(fileToSend, file.name);
+      } catch (err: any) {
+        console.error(err);
+        await processDeck(file, file.name);
+      }
     }
   };
 
@@ -269,13 +351,29 @@ export default function App() {
     setIsProcessing(true);
     setStatusMessage('Fetching sample deck...');
     try {
-      const res = await fetch('/api/sample_pptx');
+      const res = await fetch('/api/demo_ast');
       if (!res.ok) throw new Error('Sample presentation not found on server.');
-      const blob = await res.blob();
-      await processDeck(blob, 'sample_legacy_pitch.pptx');
+      const data = await res.json();
+      if (data.status === 'success') {
+        setSlides(data.slides || []);
+        setOriginalSlides(data.original_slides || []);
+        setActiveSlideIndex(0);
+        setSelectedNodeIndex(null);
+        setDeckBase64(data.deck_base64 || null);
+        setViewMode('after');
+        setFileName('sample_12slide_archetypes.pptx');
+        setStatusMessage(`Loaded sample deck (${(data.slides || []).length} slides)`);
+      } else {
+        // Fallback to sample_pptx
+        const pptxRes = await fetch('/api/sample_pptx');
+        if (!pptxRes.ok) throw new Error(data.message || 'Failed to load sample');
+        const blob = await pptxRes.blob();
+        await processDeck(blob, 'sample_legacy_pitch.pptx');
+      }
     } catch (err: any) {
       console.error(err);
       setStatusMessage(`Failed to load sample: ${err.message}`);
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -628,7 +726,7 @@ export default function App() {
                   height: '495px',
                   backgroundColor:
                     viewMode === 'before'
-                      ? '#F8FAFC'
+                      ? (activeSlide?.background_color || '#FFFFFF')
                       : `#${(currentBrand.palette.background || '030C1E').replace(/^#/, '')}`,
                 }}
                 className="w-full h-full relative overflow-hidden"
@@ -691,11 +789,12 @@ export default function App() {
                   {activeSlide?.nodes
                     .filter(
                       (n) =>
-                        n.type === 'RECTANGLE_SHAPE' ||
+                        (n.type === 'RECTANGLE_SHAPE' ||
                         n.type === 'CONTAINER_SHAPE' ||
                         n.type === 'OVAL_SHAPE' ||
                         n.type === 'ARROW_SHAPE' ||
-                        n.type === 'LINE_SHAPE'
+                        n.type === 'LINE_SHAPE') &&
+                        (viewMode === 'after' || (!n.shape_name?.startsWith('BrandMorph') && !n.name?.startsWith('BrandMorph')))
                     )
                     .map((node, nIdx) => {
                       const leftPx = ((node.x ?? node.bbox.left) ?? 0) * SCALE_X;
@@ -761,8 +860,14 @@ export default function App() {
                                   <tr key={`tr-${rIdx}`}>
                                     {row.map((cell: any, cIdx: number) => {
                                       const isHeader = rIdx === 0;
-                                      const cellBg = cell.fill_color || (isHeader ? '#FFB81C' : rIdx % 2 === 1 ? '#081E36' : '#030C1E');
-                                      const cellColor = cell.text_color || (isHeader ? '#001F33' : cIdx === 0 ? '#FFB81C' : '#FFFFFF');
+                                      const cellBg =
+                                        viewMode === 'before'
+                                          ? (cell.fill_color || '#FFFFFF')
+                                          : (cell.fill_color || (isHeader ? '#FFB81C' : rIdx % 2 === 1 ? '#081E36' : '#030C1E'));
+                                      const cellColor =
+                                        viewMode === 'before'
+                                          ? (cell.text_color || '#111827')
+                                          : (cell.text_color || (isHeader ? '#001F33' : cIdx === 0 ? '#FFB81C' : '#FFFFFF'));
                                       const colPct = tableData.col_widths?.[cIdx] ?? 100 / row.length;
                                       return (
                                         <td
@@ -775,7 +880,7 @@ export default function App() {
                                             fontSize: `${Math.max(9, Math.min(13, (cell.font_size || 11) * 0.95))}px`,
                                             textAlign: cell.align || 'left',
                                             verticalAlign: 'middle',
-                                            border: '1px solid #14305F',
+                                            border: viewMode === 'before' ? '1px solid #E2E8F0' : '1px solid #14305F',
                                             padding: '4px 8px',
                                             width: `${colPct}%`,
                                             wordBreak: 'break-word',
@@ -814,7 +919,11 @@ export default function App() {
 
                   {/* Layer 4: Text Containers */}
                   {activeSlide?.nodes
-                    .filter((n) => n.type === 'TEXT_CONTAINER')
+                    .filter(
+                      (n) =>
+                        n.type === 'TEXT_CONTAINER' &&
+                        (viewMode === 'after' || (!n.shape_name?.startsWith('BrandMorph') && !n.name?.startsWith('BrandMorph')))
+                    )
                     .map((node, nIdx) => {
                       const leftPx = ((node.x ?? node.bbox.left) ?? 0) * SCALE_X;
                       const topPx = ((node.y ?? node.bbox.top) ?? 0) * SCALE_Y;
@@ -854,7 +963,7 @@ export default function App() {
 
                             const defaultColor =
                               viewMode === 'before'
-                                ? '#1F4E79'
+                                ? '#111827'
                                 : isTitle
                                 ? '#FFB81C'
                                 : '#FFFFFF';

@@ -116,7 +116,7 @@ async def health():
 @app.get("/api/demo_ast")
 @app.get("/api/parse_test_ppt")
 async def demo_ast():
-    """Parse the bundled sample deck; no user data needed."""
+    """Parse the bundled sample deck; returns original_slides, slides, and deck_base64."""
     samples_dir = os.path.join(os.path.dirname(__file__), "samples")
     examples_dir = os.path.join(os.path.dirname(__file__), "examples")
     test_path = os.environ.get(
@@ -129,12 +129,36 @@ async def demo_ast():
         test_path = os.path.join(examples_dir, "demo_raw.pptx")
     if not os.path.exists(test_path):
         return {"status": "error", "message": "Sample deck not found. Place sample_legacy_pitch.pptx in backend/samples/ or demo_raw.pptx in backend/examples/."}
+
+    out_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pptx")
+    out_tmp.close()
     try:
-        decompiler = SlideDecompiler(test_path)
-        ast = decompiler.parse_deck()
-        return {"status": "success", "slides": ast, "slide_count": len(ast)}
+        orig_dec = SlideDecompiler(test_path, raw_mode=True)
+        original_slides = orig_dec.parse_deck()
+
+        try:
+            dna = BrandDNA.load("enterprise_navy")
+            MorphPipeline(dna).run(test_path, out_tmp.name)
+            morphed_dec = SlideDecompiler(out_tmp.name, raw_mode=False)
+            slides = morphed_dec.parse_deck()
+            with open(out_tmp.name, "rb") as f:
+                deck_b64 = base64.b64encode(f.read()).decode("ascii")
+        except Exception:
+            slides = original_slides
+            deck_b64 = None
+
+        return {
+            "status": "success",
+            "slides": slides,
+            "original_slides": original_slides,
+            "deck_base64": deck_b64,
+            "slide_count": len(slides),
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    finally:
+        if os.path.exists(out_tmp.name):
+            os.remove(out_tmp.name)
 
 @app.post("/api/export_deck")
 async def export_deck(payload: dict[str, Any] = Body(...)):
@@ -271,13 +295,13 @@ async def api_brand_apply(
         slides_ast = []
         original_ast = []
         try:
-            morphed_dec = SlideDecompiler(out_tmp.name if not dry_run else src)
+            morphed_dec = SlideDecompiler(out_tmp.name if not dry_run else src, raw_mode=False)
             slides_ast = morphed_dec.parse_deck()
         except Exception:
             pass
 
         try:
-            orig_dec = SlideDecompiler(src)
+            orig_dec = SlideDecompiler(src, raw_mode=True)
             original_ast = orig_dec.parse_deck()
         except Exception:
             pass

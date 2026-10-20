@@ -243,7 +243,7 @@ def test_12_slide_presentation_archetypes_and_rules(tmp_path):
     assert 24.0 <= r1.font.size.pt <= 32.0, f"Slide 1 Title size {r1.font.size.pt} not in [24, 32]"
 
     # -------------------------------------------------------------------------
-    # CHECK 2: Content slides have titles snapped to top-left (left == 0.65", top == 0.38")
+    # CHECK 2: Content slides have titles snapped to top-left (left == 0.80", top == 0.45")
     # -------------------------------------------------------------------------
     content_slide_indices = [1, 2, 4, 6, 7, 8, 9, 10]  # Agenda, Multi-Card, Table, Team, Timeline, Multi-Cards
     for idx in content_slide_indices:
@@ -256,11 +256,11 @@ def test_12_slide_presentation_archetypes_and_rules(tmp_path):
         ]
         assert len(title_candidates) > 0, f"Slide {idx+1} missing top title"
         title = title_candidates[0]
-        assert abs(title.left.inches - 0.65) < 0.05, (
-            f"Slide {idx+1} title left is {title.left.inches:.2f}\", expected 0.65\""
+        assert abs(title.left.inches - 0.80) < 0.05, (
+            f"Slide {idx+1} title left is {title.left.inches:.2f}\", expected 0.80\""
         )
-        assert abs(title.top.inches - 0.38) < 0.05, (
-            f"Slide {idx+1} title top is {title.top.inches:.2f}\", expected 0.38\""
+        assert abs(title.top.inches - 0.45) < 0.05, (
+            f"Slide {idx+1} title top is {title.top.inches:.2f}\", expected 0.45\""
         )
 
     # -------------------------------------------------------------------------
@@ -378,4 +378,120 @@ def test_12_slide_presentation_archetypes_and_rules(tmp_path):
     assert "table_data" in t_nodes[0], "Slide 5 TABLE node must have table_data"
     assert len(t_nodes[0]["table_data"]["rows"]) == 4, "table_data must have 4 rows"
     assert len(t_nodes[0]["table_data"]["col_widths"]) == 3, "table_data must have 3 col_widths"
+
+
+def test_canva_dimension_normalization_and_card_injection(tmp_path):
+    """Test 10.0" x 5.625" Canva deck dimension scaling, title detection, and card injection."""
+    deck_path = tmp_path / "canva_template.pptx"
+    out_path = tmp_path / "canva_morphed.pptx"
+
+    prs = pptx.Presentation()
+    # 10.0 x 5.625 Canva widescreen
+    prs.slide_width = Inches(10.0)
+    prs.slide_height = Inches(5.625)
+
+    # Slide 1: Cover slide
+    s0 = prs.slides.add_slide(prs.slide_layouts[6])
+    t0 = s0.shapes.add_textbox(Inches(1.0), Inches(1.5), Inches(8.0), Inches(1.0))
+    t0.text_frame.text = "Company Presentation"
+
+    # Slide 2: Content slide
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # Decorative number "01" (should NOT be classified as title)
+    num_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.2), Inches(0.8), Inches(0.4))
+    num_box.text_frame.text = "01"
+
+    # Freeform slide title
+    title_box = slide.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(6.0), Inches(0.8))
+    p_t = title_box.text_frame.paragraphs[0]
+    p_t.text = "Quarterly Business Operations"
+    p_t.font.size = Pt(24)
+
+    # Loose body content text block without a backing card
+    body_box = slide.shapes.add_textbox(Inches(1.0), Inches(2.0), Inches(5.0), Inches(1.5))
+    p_b = body_box.text_frame.paragraphs[0]
+    p_b.text = "Our cloud migration expanded delivery capability across enterprise accounts."
+    p_b.font.size = Pt(12)
+
+    # Slide 3: Closing slide
+    s2 = prs.slides.add_slide(prs.slide_layouts[6])
+    t2 = s2.shapes.add_textbox(Inches(1.0), Inches(2.5), Inches(8.0), Inches(1.0))
+    t2.text_frame.text = "Thank You"
+
+    prs.save(str(deck_path))
+
+    # Run MorphPipeline
+    dna = BrandDNA.load("enterprise_navy")
+    MorphPipeline(dna).run(deck_path, out_path)
+
+    # Verify morphed presentation dimensions scaled to 13.333 x 7.5
+    morphed_prs = pptx.Presentation(str(out_path))
+    assert abs(morphed_prs.slide_width.inches - 13.333) < 0.05
+    assert abs(morphed_prs.slide_height.inches - 7.5) < 0.05
+
+    m_slide = morphed_prs.slides[1]
+
+    # Verify title is "Quarterly Business Operations", snapped to top-left, Times New Roman, unbolded
+    t_shape = None
+    for s in m_slide.shapes:
+        if s.has_text_frame and "Quarterly Business Operations" in s.text_frame.text:
+            t_shape = s
+            break
+    assert t_shape is not None, "Title shape 'Quarterly Business Operations' not found"
+    assert abs(t_shape.left.inches - 0.80) < 0.05
+    assert abs(t_shape.top.inches - 0.45) < 0.05
+    run = t_shape.text_frame.paragraphs[0].runs[0]
+    assert run.font.name == "Times New Roman"
+    assert run.font.bold is False
+
+    # Verify dynamic card injection behind body text
+    injected_cards = [s for s in m_slide.shapes if getattr(s, "name", "") == "BrandMorphInjectedCard"]
+    assert len(injected_cards) >= 1, "Expected dynamic card shape injection behind loose body text"
+    card = injected_cards[0]
+    assert card.fill and f"{card.fill.fore_color.rgb}".upper() == "081E36"
+
+    # Verify Z-order: card element sits before body text element in spTree
+    body_shape = [s for s in m_slide.shapes if s.has_text_frame and "cloud migration" in s.text_frame.text][0]
+    spTree_list = list(m_slide.shapes._spTree)
+    assert spTree_list.index(card._element) < spTree_list.index(body_shape._element), "Card must sit behind text"
+
+
+def test_raw_mode_vs_governed_mode_preservation(tmp_path):
+    """Test raw_mode=True preserves original light background and dark text, while raw_mode=False is governed."""
+    deck_path = tmp_path / "light_deck.pptx"
+    out_path = tmp_path / "governed_deck.pptx"
+
+    prs = pptx.Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # Add light slide with dark charcoal text
+    t_box = slide.shapes.add_textbox(Inches(1.0), Inches(1.0), Inches(8.0), Inches(1.0))
+    p = t_box.text_frame.paragraphs[0]
+    p.text = "Enterprise Transformation"
+    r = p.runs[0]
+    r.font.name = "Calibri"
+    r.font.color.rgb = RGBColor(17, 24, 39)  # #111827
+
+    prs.save(str(deck_path))
+
+    # 1. Parse raw deck with raw_mode=True
+    raw_dec = SlideDecompiler(str(deck_path), raw_mode=True)
+    raw_ast = raw_dec.parse_deck()
+    assert len(raw_ast) == 1
+    assert raw_ast[0]["background_color"] == "#FFFFFF"
+    raw_text_node = [n for n in raw_ast[0]["nodes"] if n["type"] == "TEXT_CONTAINER"][0]
+    assert raw_text_node["paragraphs"][0]["font_color"] == "#111827"
+
+    # 2. Morph deck
+    dna = BrandDNA.load("enterprise_navy")
+    MorphPipeline(dna).run(deck_path, out_path)
+
+    # 3. Parse governed deck with raw_mode=False
+    gov_dec = SlideDecompiler(str(out_path), raw_mode=False)
+    gov_ast = gov_dec.parse_deck()
+    assert len(gov_ast) == 1
+    assert gov_ast[0]["background_color"] in ("#001F33", "#030C1E")
 
