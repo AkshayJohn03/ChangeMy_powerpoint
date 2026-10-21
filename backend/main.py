@@ -313,6 +313,14 @@ async def api_brand_apply(
     out_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pptx")
     out_tmp.close()
     try:
+        # Step B: Parse untouched raw slide AST before any morphing
+        original_ast = []
+        try:
+            orig_dec = SlideDecompiler(src, raw_mode=True)
+            original_ast = orig_dec.parse_deck()
+        except Exception:
+            pass
+
         llm = llm_from_env() if rewrite_copy else None
         report = MorphPipeline(
             dna, llm,
@@ -320,16 +328,9 @@ async def api_brand_apply(
         ).run(src, out_tmp.name)
 
         slides_ast = []
-        original_ast = []
         try:
             morphed_dec = SlideDecompiler(out_tmp.name if not dry_run else src, raw_mode=False)
             slides_ast = morphed_dec.parse_deck()
-        except Exception:
-            pass
-
-        try:
-            orig_dec = SlideDecompiler(src, raw_mode=True)
-            original_ast = orig_dec.parse_deck()
         except Exception:
             pass
 

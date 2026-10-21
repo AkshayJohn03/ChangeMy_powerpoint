@@ -29,6 +29,7 @@ interface ASTNode {
   h?: number;
   fill_color?: string;
   line_color?: string;
+  is_title?: boolean;
   bbox: { left: number; top: number; width: number; height: number };
   image_src?: string;
   image_data?: string;
@@ -1010,7 +1011,7 @@ export default function App() {
                           }`}
                         >
                           {node.paragraphs?.map((p, pIdx) => {
-                            const isTitle = (node.y ?? node.bbox.top) < 1.8 && (node.w ?? node.bbox.width) > 3.5;
+                            const isTitle = node.is_title ?? ((node.y ?? node.bbox.top) < 1.8 && (node.w ?? node.bbox.width) > 3.5);
                             const fontFace =
                               viewMode === 'before'
                                 ? (p.font_face || 'Calibri, sans-serif')
@@ -1035,7 +1036,7 @@ export default function App() {
                                   color: color,
                                   textAlign: (p.align as any) || 'left',
                                 }}
-                                className="w-full leading-tight mb-0.5 truncate select-text"
+                                className="w-full leading-tight mb-0.5 break-words select-text"
                               >
                                 {p.text}
                               </div>

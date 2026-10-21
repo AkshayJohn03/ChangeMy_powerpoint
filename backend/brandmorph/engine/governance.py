@@ -146,6 +146,11 @@ class CorporateGovernancePass:
 
     def _govern_slide_shapes(self, slide, slide_idx: int) -> None:
         """Recursively walk all shapes, tables, and groups to enforce typography & contrast."""
+        try:
+            from .archetype_engine import _govern_smartart_drawing
+            _govern_smartart_drawing(slide.part)
+        except Exception:
+            pass
         for shape in list(slide.shapes):
             self._process_shape(shape, slide_idx, default_bg=HEX_DARK_NAVY)
 
@@ -225,6 +230,28 @@ class CorporateGovernancePass:
 
         # 3. Text frames in AutoShapes, TextBoxes, Placeholders
         if shape.has_text_frame:
+            try:
+                from .archetype_engine import _is_footer_or_slidenum
+                if _is_footer_or_slidenum(shape):
+                    try:
+                        if hasattr(shape, "fill"):
+                            shape.fill.background()
+                        if hasattr(shape, "line") and shape.line:
+                            shape.line.fill.background()
+                        for p in shape.text_frame.paragraphs:
+                            for r in p.runs:
+                                r.font.name = "Arial"
+                                r.font.size = Pt(8.5)
+                                r.font.bold = False
+                                r.font.italic = False
+                                r.font.color.rgb = RGBColor(148, 163, 184)
+                                self._inject_run_xml(r, "Arial", "94A3B8")
+                    except Exception:
+                        pass
+                    return
+            except Exception:
+                pass
+
             shape_bg = self._get_shape_fill_hex(shape) or default_bg
             self._process_text_frame(
                 shape.text_frame, shape, slide_idx, effective_bg=shape_bg, is_table=False
@@ -242,6 +269,13 @@ class CorporateGovernancePass:
     def _is_slide_title(self, shape, para, is_table: bool) -> bool:
         if is_table:
             return False
+
+        try:
+            from .archetype_engine import _is_footer_or_slidenum
+            if _is_footer_or_slidenum(shape):
+                return False
+        except Exception:
+            pass
 
         # Placeholder checks
         if getattr(shape, "is_placeholder", False):
@@ -281,6 +315,13 @@ class CorporateGovernancePass:
     def _is_subheading(self, shape, para, is_table: bool) -> bool:
         if is_table:
             return False
+
+        try:
+            from .archetype_engine import _is_footer_or_slidenum
+            if _is_footer_or_slidenum(shape):
+                return False
+        except Exception:
+            pass
 
         if getattr(shape, "is_placeholder", False):
             try:

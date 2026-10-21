@@ -56,6 +56,52 @@ class SlideArchetype(str, Enum):
     TEAM_OR_GALLERY_GRID = "Team Gallery Grid"
     MULTI_CARD_CONTENT = "Multi-Card Content"
     CLOSING_SLIDE = "Closing Slide"
+    QUOTE_SLIDE = "Quote Slide"
+
+
+def _is_footer_or_slidenum(shape, slide_h: float = 7.5) -> bool:
+    """Return True if shape is a footer, slide number, or date artifact."""
+    if shape is None:
+        return False
+    # 1. Placeholder format checks
+    if getattr(shape, "is_placeholder", False):
+        try:
+            pt = shape.placeholder_format.type
+            # 13: HEADER, 14: DATE, 15: FOOTER, 16: SLIDE_NUMBER
+            if pt in (PP_PLACEHOLDER.FOOTER, PP_PLACEHOLDER.SLIDE_NUMBER, PP_PLACEHOLDER.DATE, PP_PLACEHOLDER.HEADER) or pt in (13, 14, 15, 16):
+                return True
+        except Exception:
+            pass
+
+    # 2. Shape name checks
+    name = (getattr(shape, "name", "") or "").lower()
+    if any(k in name for k in ("footer", "slide number", "number placeholder", "slide_number", "page number", "page_number")):
+        return True
+    if "date" in name and not any(k in name for k in ("update", "candidate", "foundation")):
+        return True
+
+    # 3. Text content & position heuristics
+    if getattr(shape, "has_text_frame", False) and shape.text_frame:
+        txt = shape.text_frame.text.strip()
+        txt_l = txt.lower()
+        if not txt:
+            return False
+        if txt_l in ("presentation title", "sample footer text", "confidential"):
+            return True
+
+        top_in = shape.top.inches if (hasattr(shape, "top") and shape.top is not None) else 0.0
+        h_in = shape.height.inches if (hasattr(shape, "height") and shape.height is not None) else 1.0
+
+        # Purely 1-3 digits when top > 72% of slide height or height < 0.65"
+        if txt.isdigit() and len(txt) <= 3:
+            if top_in > (slide_h * 0.72) or h_in < 0.65:
+                return True
+
+        # Position near bottom margin with short text
+        if top_in >= (slide_h * 0.84) and len(txt) < 50:
+            return True
+
+    return False
 
 
 def relative_luminance(r: int, g: int, b: int) -> float:
@@ -101,6 +147,9 @@ class SlideGraphClassifier:
         has_title_placeholder = False
 
         for shape in slide.shapes:
+            if _is_footer_or_slidenum(shape):
+                continue
+
             # Check placeholders
             if getattr(shape, "is_placeholder", False):
                 try:
@@ -216,9 +265,9 @@ class SlideGraphClassifier:
                     break
         features[14] = float(caption_pairs)
 
-        # f15: Quote / Short section splitter (few text shapes, short word count)
-        total_words = sum(len(txt.split()) for txt in all_text)
-        features[15] = 1.0 if (len(text_shapes) <= 2 and total_words <= 25 and not has_table) else 0.0
+        # f15: Section splitter keywords ("topic", "section", "part", "chapter", "module")
+        splitter_kw = any(w in joined_text for w in ["topic", "section", "part", "chapter", "module", "splitter"])
+        features[15] = 1.0 if (splitter_kw and len(text_shapes) <= 3 and not has_table) else 0.0
 
         return features
 
@@ -244,6 +293,41 @@ class SlideGraphClassifier:
         timeline_kw = feats[7] > 0.5
         if h_seq or (timeline_kw and feats[12] >= 3):
             return SlideArchetype.PROCESS_TIMELINE
+
+        # Check for Quote Slide:
+        # Non-cover slide where only content is a quote + optional author
+        non_footer_text = [
+            s.text_frame.text.strip() for s in slide.shapes
+            if getattr(s, "has_text_frame", False) and s.text_frame.text.strip()
+            and not _is_footer_or_slidenum(s)
+            and not getattr(s, "name", "").startswith("BrandMorph")
+        ]
+        has_top_title = False
+        for s in slide.shapes:
+            if getattr(s, "has_text_frame", False) and s.text_frame and s.text_frame.text.strip():
+                if _is_footer_or_slidenum(s):
+                    continue
+                top_in = s.top.inches if (hasattr(s, "top") and s.top) else 99.0
+                txt = s.text_frame.text.strip()
+                if top_in < 1.5 and len(txt) <= 50 and not (txt.startswith('"') or txt.startswith('“')):
+                    has_top_title = True
+                    break
+                if getattr(s, "is_placeholder", False):
+                    try:
+                        if s.placeholder_format.type in (PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.CENTER_TITLE):
+                            has_top_title = True
+                            break
+                    except Exception:
+                        pass
+
+        has_quote = False
+        if not has_top_title and slide_idx > 0 and not has_table_shape and feats[5] <= 1 and 1 <= len(non_footer_text) <= 2:
+            longest_txt = max(non_footer_text, key=len)
+            if len(longest_txt) >= 35 or '"' in longest_txt or '“' in longest_txt or '”' in longest_txt:
+                has_quote = True
+
+        if has_quote and feats[9] <= 0.5 and feats[10] <= 0.5:
+            return SlideArchetype.QUOTE_SLIDE
 
         # Check for external golden_brain.json weights
         weights_paths = [
@@ -303,15 +387,86 @@ class SlideGraphClassifier:
             return SlideArchetype.PROCESS_TIMELINE
 
         # 6. Agenda slide
-        if agenda_kw or (slide_idx <= 1 and text_count >= 3 and not timeline_kw):
+        if agenda_kw:
             return SlideArchetype.AGENDA_SLIDE
 
-        # 7. Section splitter / Quote
+        # 7. Quote slide
+        if has_quote and not agenda_kw and not closing_kw:
+            return SlideArchetype.QUOTE_SLIDE
+
+        # 8. Section splitter
         if is_splitter and slide_idx > 0:
             return SlideArchetype.SECTION_SPLITTER
 
-        # 8. Multi-card content (standard content slide)
+        # 9. Multi-card content (standard content slide)
         return SlideArchetype.MULTI_CARD_CONTENT
+
+
+def _govern_smartart_drawing(slide_part) -> bool:
+    """Recolor DrawingML SmartArt diagram drawing XML runs and shape fills."""
+    modified = False
+    for rel in slide_part.rels.values():
+        target_ref = str(getattr(rel, "target_ref", "")).lower()
+        rel_type = str(getattr(rel, "reltype", "")).lower()
+        if "diagramdrawing" in rel_type or "drawing" in target_ref:
+            try:
+                root = etree.fromstring(rel.target_part.blob)
+                for sp in root.xpath('.//*[local-name()="sp"]'):
+                    # Check shape fill
+                    fills = sp.xpath('.//*[local-name()="spPr"]/*[local-name()="solidFill"]')
+                    is_bright = False
+                    for f in fills:
+                        srgb = f.xpath('.//*[local-name()="srgbClr"]')
+                        scheme = f.xpath('.//*[local-name()="schemeClr"]')
+                        if srgb:
+                            val = srgb[0].get("val", "").upper()
+                            if val in ("00FFFF", "FFB81C", "FFFFFF"):
+                                is_bright = True
+                        elif scheme:
+                            val = scheme[0].get("val", "")
+                            if val in ("accent1", "accent2", "accent3"):
+                                is_bright = True
+
+                    # Recolor text runs inside txBody
+                    runs = sp.xpath('.//*[local-name()="txBody"]//*[local-name()="r"]')
+                    for r in runs:
+                        rPr = r.xpath('.//*[local-name()="rPr"]')
+                        if not rPr:
+                            rPr_elem = etree.SubElement(r, f"{{{_A}}}rPr")
+                        else:
+                            rPr_elem = rPr[0]
+
+                        for c in list(rPr_elem):
+                            tag = etree.QName(c).localname
+                            if tag in ("solidFill", "schemeClr", "noFill"):
+                                rPr_elem.remove(c)
+
+                        solidFill = etree.Element(f"{{{_A}}}solidFill")
+                        srgbClr = etree.SubElement(solidFill, f"{{{_A}}}srgbClr")
+                        target_hex = "001F33" if is_bright else "FFFFFF"
+                        srgbClr.set("val", target_hex)
+
+                        first_tf = None
+                        for c in list(rPr_elem):
+                            tag = etree.QName(c).localname
+                            if tag in ("latin", "ea", "cs", "sym"):
+                                first_tf = c
+                                break
+                        if first_tf is not None:
+                            first_tf.addprevious(solidFill)
+                        else:
+                            rPr_elem.append(solidFill)
+
+                        latin = rPr_elem.find(f"{{{_A}}}latin")
+                        if latin is None:
+                            latin = etree.SubElement(rPr_elem, f"{{{_A}}}latin")
+                        latin.set("typeface", "Arial")
+
+                rel.target_part._blob = etree.tostring(root)
+                modified = True
+            except Exception:
+                pass
+    return modified
 
 
 class ArchetypeEngine:
@@ -415,13 +570,21 @@ class ArchetypeEngine:
             except Exception:
                 pass
 
-    def _find_slide_title_and_subtitle(self, slide) -> Tuple[Optional[Any], Optional[Any]]:
+    def _find_slide_title_and_subtitle(
+        self, slide, archetype: Optional[SlideArchetype] = None
+    ) -> Tuple[Optional[Any], Optional[Any]]:
         """Identify the primary title shape and optional subtitle shape."""
+        # Quote slide has no title/subtitle snapping
+        if archetype == SlideArchetype.QUOTE_SLIDE:
+            return None, None
+
         title_shape = None
         subtitle_shape = None
 
-        # 1. Placeholders first (verify it is not empty or purely numeric)
+        # 1. Placeholders first (verify it is not empty, purely numeric, or footer/slidenum)
         for shape in slide.shapes:
+            if _is_footer_or_slidenum(shape):
+                continue
             if getattr(shape, "is_placeholder", False):
                 try:
                     pt = shape.placeholder_format.type
@@ -439,6 +602,8 @@ class ArchetypeEngine:
         if not title_shape:
             candidate_titles = []
             for shape in slide.shapes:
+                if _is_footer_or_slidenum(shape):
+                    continue
                 if not shape.has_text_frame:
                     continue
                 name = (getattr(shape, "name", "") or "").lower()
@@ -558,6 +723,98 @@ class ArchetypeEngine:
         except Exception:
             pass
 
+    def _govern_smartart(self, slide) -> None:
+        """Reposition SmartArt graphic frame and recolor its drawing XML."""
+        try:
+            for s in slide.shapes:
+                is_smartart = (
+                    hasattr(s, "_element")
+                    and getattr(s._element, "tag", "").endswith("graphicFrame")
+                    and not getattr(s, "has_table", False)
+                    and not getattr(s, "has_chart", False)
+                )
+                if is_smartart:
+                    s.left = Inches(0.80)
+                    s.top = Inches(1.55)
+                    s.width = Inches(11.73)
+                    s.height = Inches(4.90)
+            _govern_smartart_drawing(slide.part)
+        except Exception:
+            pass
+
+    def _format_footer_shape(self, shape) -> None:
+        """Format footer or slide number cleanly at the bottom margin with zero card backing."""
+        if not getattr(shape, "has_text_frame", False) or not shape.text_frame:
+            return
+        txt = shape.text_frame.text.strip()
+        is_num = txt.isdigit() or (
+            getattr(shape, "is_placeholder", False)
+            and getattr(shape.placeholder_format, "type", None) in (PP_PLACEHOLDER.SLIDE_NUMBER, 16)
+        )
+        try:
+            if is_num:
+                shape.left = Inches(11.80)
+                shape.top = Inches(7.05)
+                shape.width = Inches(0.80)
+                shape.height = Inches(0.30)
+            else:
+                shape.left = Inches(0.80)
+                shape.top = Inches(7.05)
+                shape.width = Inches(5.00)
+                shape.height = Inches(0.30)
+        except Exception:
+            pass
+
+        try:
+            if hasattr(shape, "fill"):
+                shape.fill.background()
+            if hasattr(shape, "line") and shape.line:
+                shape.line.fill.background()
+        except Exception:
+            pass
+
+        for p in shape.text_frame.paragraphs:
+            p.alignment = PP_ALIGN.RIGHT if is_num else PP_ALIGN.LEFT
+            for r in p.runs:
+                r.font.name = "Arial"
+                r.font.size = Pt(8.5)
+                r.font.bold = False
+                r.font.italic = False
+                r.font.color.rgb = RGBColor(148, 163, 184)  # #94A3B8 muted slate
+                self._inject_run_xml(r, "Arial", "94A3B8")
+            self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False, fallback_hex="94A3B8")
+
+    def _snap_title_top_left(self, title_shape) -> None:
+        """Snap content slide title to standardized top-left header anchor."""
+        if not title_shape or not title_shape.has_text_frame:
+            return
+        try:
+            title_shape.left = Inches(0.80)
+            title_shape.top = Inches(0.45)
+            title_shape.width = Inches(10.20)
+            title_shape.height = Inches(0.85)
+        except Exception:
+            pass
+        for p in title_shape.text_frame.paragraphs:
+            p.alignment = PP_ALIGN.LEFT
+            for r in p.runs:
+                cur_hex = None
+                if r.font and r.font.color and r.font.color.type == 1:
+                    try:
+                        cur_hex = str(r.font.color.rgb).upper()
+                    except Exception:
+                        pass
+                t_hex = HEX_WHITE if cur_hex in ("FFFFFF", "F2F6FC") else HEX_CORP_GOLD
+                t_rgb = RGB_WHITE if t_hex == HEX_WHITE else RGB_CORP_GOLD
+
+                r.font.name = "Times New Roman"
+                r.font.size = Pt(26)
+                r.font.bold = False
+                r.font.italic = False
+                r.font.color.rgb = t_rgb
+                self._inject_run_xml(r, "Times New Roman", t_hex)
+            self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
+
     def _reflow_and_govern_slide(
         self, slide, slide_idx: int, total_slides: int, archetype: SlideArchetype
     ) -> None:
@@ -578,188 +835,41 @@ class ArchetypeEngine:
                 except Exception:
                     pass
 
-        title_shape, subtitle_shape = self._find_slide_title_and_subtitle(slide)
+        # 1. Remove Decorative Non-Text Template Clutter
+        for s in list(slide.shapes):
+            s_name = getattr(s, "name", "") or ""
+            if "BrandMorph" in s_name or "BottomFrame" in s_name or "Logo_Stamp" in s_name:
+                continue
+            is_pic = (s.shape_type == MSO_SHAPE_TYPE.PICTURE) or (hasattr(s, "image") and getattr(s, "image", None) is not None)
+            is_table = getattr(s, "has_table", False) and s.has_table
+            is_group = (s.shape_type == MSO_SHAPE_TYPE.GROUP)
+            is_gf = hasattr(s, "_element") and getattr(s._element, "tag", "").endswith("graphicFrame")
+            if is_pic or is_table or is_group or is_gf:
+                continue
+            if s.shape_type in (MSO_SHAPE_TYPE.AUTO_SHAPE, MSO_SHAPE_TYPE.FREEFORM):
+                has_text = getattr(s, "has_text_frame", False) and s.text_frame and s.text_frame.text.strip()
+                if not has_text:
+                    try:
+                        parent = s._element.getparent()
+                        if parent is not None:
+                            parent.remove(s._element)
+                    except Exception:
+                        pass
+
+        # 2. Govern SmartArt diagram drawing XML & graphic frame bounding box
+        self._govern_smartart(slide)
+
+        # 3. Format footers and slide numbers cleanly at bottom margin
+        footer_shapes = []
+        for s in list(slide.shapes):
+            if _is_footer_or_slidenum(s):
+                footer_shapes.append(s)
+                self._format_footer_shape(s)
+
+        title_shape, subtitle_shape = self._find_slide_title_and_subtitle(slide, archetype)
         if archetype not in (SlideArchetype.COVER_SLIDE, SlideArchetype.SECTION_SPLITTER):
             subtitle_shape = None
 
-        # ---------------------------------------------------------------------
-        # RULE A: Title Detection & Top-Left Positioning
-        # ---------------------------------------------------------------------
-        if title_shape and title_shape.has_text_frame:
-            tf = title_shape.text_frame
-            if archetype == SlideArchetype.COVER_SLIDE:
-                # Cover slide: Hero zone left=0.85", top=2.2", width=11.0", height=1.0"
-                try:
-                    title_shape.left = Inches(0.85)
-                    title_shape.top = Inches(2.2)
-                    title_shape.width = Inches(11.0)
-                    title_shape.height = Inches(1.0)
-                except Exception:
-                    pass
-                for p in tf.paragraphs:
-                    p.alignment = PP_ALIGN.LEFT
-                    for r in p.runs:
-                        cur_hex = None
-                        if r.font and r.font.color and r.font.color.type == 1:
-                            try:
-                                cur_hex = str(r.font.color.rgb).upper()
-                            except Exception:
-                                pass
-                        t_hex = HEX_WHITE if cur_hex in ("FFFFFF", "F2F6FC") else HEX_CORP_GOLD
-                        t_rgb = RGB_WHITE if t_hex == HEX_WHITE else RGB_CORP_GOLD
-
-                        r.font.name = "Times New Roman"
-                        r.font.size = Pt(32)
-                        r.font.bold = False
-                        r.font.italic = False
-                        r.font.color.rgb = t_rgb
-                        self._inject_run_xml(r, "Times New Roman", t_hex)
-                    self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
-
-                # Subtitle directly below at left=0.85", top=3.2"
-                if subtitle_shape and subtitle_shape != title_shape and subtitle_shape.has_text_frame:
-                    try:
-                        subtitle_shape.left = Inches(0.85)
-                        subtitle_shape.top = Inches(3.2)
-                        subtitle_shape.width = Inches(11.0)
-                        subtitle_shape.height = Inches(0.75)
-                    except Exception:
-                        pass
-                    for p in subtitle_shape.text_frame.paragraphs:
-                        p.alignment = PP_ALIGN.LEFT
-                        for r in p.runs:
-                            r.font.name = "Arial"
-                            r.font.size = Pt(16)
-                            r.font.bold = False
-                            r.font.italic = False
-                            r.font.color.rgb = RGB_WHITE
-                            self._inject_run_xml(r, "Arial", HEX_WHITE)
-                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False)
-
-            elif archetype == SlideArchetype.SECTION_SPLITTER:
-                # Section splitter: Hero title left=0.85", top=2.0", Times New Roman 32pt
-                try:
-                    title_shape.left = Inches(0.85)
-                    title_shape.top = Inches(2.0)
-                    title_shape.width = Inches(11.0)
-                    title_shape.height = Inches(1.0)
-                except Exception:
-                    pass
-                for p in tf.paragraphs:
-                    p.alignment = PP_ALIGN.LEFT
-                    for r in p.runs:
-                        cur_hex = None
-                        if r.font and r.font.color and r.font.color.type == 1:
-                            try:
-                                cur_hex = str(r.font.color.rgb).upper()
-                            except Exception:
-                                pass
-                        t_hex = HEX_WHITE if cur_hex in ("FFFFFF", "F2F6FC") else HEX_CORP_GOLD
-                        t_rgb = RGB_WHITE if t_hex == HEX_WHITE else RGB_CORP_GOLD
-
-                        r.font.name = "Times New Roman"
-                        r.font.size = Pt(32)
-                        r.font.bold = False
-                        r.font.italic = False
-                        r.font.color.rgb = t_rgb
-                        self._inject_run_xml(r, "Times New Roman", t_hex)
-                    self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
-
-                if subtitle_shape and subtitle_shape != title_shape and subtitle_shape.has_text_frame:
-                    try:
-                        subtitle_shape.left = Inches(0.85)
-                        subtitle_shape.top = Inches(3.1)
-                        subtitle_shape.width = Inches(11.0)
-                        subtitle_shape.height = Inches(0.75)
-                    except Exception:
-                        pass
-                    for p in subtitle_shape.text_frame.paragraphs:
-                        p.alignment = PP_ALIGN.LEFT
-                        for r in p.runs:
-                            r.font.name = "Arial"
-                            r.font.size = Pt(16)
-                            r.font.bold = False
-                            r.font.italic = False
-                            r.font.color.rgb = RGB_WHITE
-                            self._inject_run_xml(r, "Arial", HEX_WHITE)
-                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False)
-
-            elif archetype == SlideArchetype.CLOSING_SLIDE:
-                try:
-                    title_shape.left = Inches(0.85)
-                    title_shape.top = Inches(2.5)
-                    title_shape.width = Inches(11.0)
-                    title_shape.height = Inches(1.0)
-                except Exception:
-                    pass
-                for p in tf.paragraphs:
-                    p.alignment = PP_ALIGN.LEFT
-                    for r in p.runs:
-                        cur_hex = None
-                        if r.font and r.font.color and r.font.color.type == 1:
-                            try:
-                                cur_hex = str(r.font.color.rgb).upper()
-                            except Exception:
-                                pass
-                        t_hex = HEX_WHITE if cur_hex in ("FFFFFF", "F2F6FC") else HEX_CORP_GOLD
-                        t_rgb = RGB_WHITE if t_hex == HEX_WHITE else RGB_CORP_GOLD
-
-                        r.font.name = "Times New Roman"
-                        r.font.size = Pt(32)
-                        r.font.bold = False
-                        r.font.italic = False
-                        r.font.color.rgb = t_rgb
-                        self._inject_run_xml(r, "Times New Roman", t_hex)
-                    self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
-
-            else:
-                # Content slides: ALWAYS snap title to Top-Left anchor: left=0.80", top=0.45", width=10.2", height=0.85"
-                try:
-                    title_shape.left = Inches(0.80)
-                    title_shape.top = Inches(0.45)
-                    title_shape.width = Inches(10.2)
-                    title_shape.height = Inches(0.85)
-                except Exception:
-                    pass
-                for p in tf.paragraphs:
-                    p.alignment = PP_ALIGN.LEFT
-                    for r in p.runs:
-                        cur_hex = None
-                        if r.font and r.font.color and r.font.color.type == 1:
-                            try:
-                                cur_hex = str(r.font.color.rgb).upper()
-                            except Exception:
-                                pass
-                        t_hex = HEX_WHITE if cur_hex in ("FFFFFF", "F2F6FC") else HEX_CORP_GOLD
-                        t_rgb = RGB_WHITE if t_hex == HEX_WHITE else RGB_CORP_GOLD
-
-                        r.font.name = "Times New Roman"
-                        r.font.size = Pt(26)
-                        r.font.bold = False
-                        r.font.italic = False
-                        r.font.color.rgb = t_rgb
-                        self._inject_run_xml(r, "Times New Roman", t_hex)
-                    self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
-
-                # Collision Prevention: Any non-title shape whose top < 1.40" shifted down to >= 1.45"
-                for s in slide.shapes:
-                    if s == title_shape or getattr(s, "has_table", False):
-                        continue
-                    s_name = getattr(s, "name", "") or ""
-                    if "BrandMorph" in s_name or "BottomFrame" in s_name or "Logo_Stamp" in s_name:
-                        continue
-                    try:
-                        if hasattr(s, "top") and s.top is not None and s.top.inches < 1.40:
-                            s_h = s.height.inches if hasattr(s, "height") and s.height else 1.0
-                            s.top = Inches(1.45)
-                            if (1.45 + s_h) > 7.10:
-                                s.height = Inches(max(0.5, 7.10 - 1.45))
-                    except Exception:
-                        pass
-
-        # ---------------------------------------------------------------------
-        # RULE B: Image & Text Reflow (Never Overlap)
-        # ---------------------------------------------------------------------
         pictures = []
         for s in slide.shapes:
             is_pic = False
@@ -774,21 +884,320 @@ class ArchetypeEngine:
 
         content_text_shapes = [
             s for s in slide.shapes
-            if s.has_text_frame
+            if getattr(s, "has_text_frame", False)
             and s != title_shape
             and s != subtitle_shape
+            and s not in footer_shapes
+            and not _is_footer_or_slidenum(s)
             and not getattr(s, "name", "").startswith("BrandMorph")
         ]
 
         table_shapes = [s for s in slide.shapes if getattr(s, "has_table", False) and s.has_table]
 
-        # Case B1: Slide with Table
-        if table_shapes:
+        # ---------------------------------------------------------------------
+        # ARCHETYPE LAYOUT REFLOW
+        # ---------------------------------------------------------------------
+        if archetype == SlideArchetype.COVER_SLIDE:
+            has_photo = len(pictures) > 0
+            if has_photo:
+                self._fit_picture_in_slot(pictures[0], 6.80, 1.20, 5.70, 5.20)
+                t_w = 5.60
+            else:
+                t_w = 11.50
+
+            if title_shape and title_shape.has_text_frame:
+                try:
+                    title_shape.left = Inches(0.80)
+                    title_shape.top = Inches(2.30)
+                    title_shape.width = Inches(t_w)
+                    title_shape.height = Inches(1.00)
+                except Exception:
+                    pass
+                for p in title_shape.text_frame.paragraphs:
+                    p.alignment = PP_ALIGN.LEFT
+                    for r in p.runs:
+                        cur_hex = None
+                        if r.font and r.font.color and r.font.color.type == 1:
+                            try:
+                                cur_hex = str(r.font.color.rgb).upper()
+                            except Exception:
+                                pass
+                        t_hex = HEX_WHITE if cur_hex in ("FFFFFF", "F2F6FC") else HEX_CORP_GOLD
+                        t_rgb = RGB_WHITE if t_hex == HEX_WHITE else RGB_CORP_GOLD
+
+                        r.font.name = "Times New Roman"
+                        r.font.size = Pt(32)
+                        r.font.bold = False
+                        r.font.italic = False
+                        r.font.color.rgb = t_rgb
+                        self._inject_run_xml(r, "Times New Roman", t_hex)
+                    self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
+
+            if subtitle_shape and subtitle_shape != title_shape and subtitle_shape.has_text_frame:
+                try:
+                    subtitle_shape.left = Inches(0.80)
+                    subtitle_shape.top = Inches(3.40)
+                    subtitle_shape.width = Inches(t_w)
+                    subtitle_shape.height = Inches(0.80)
+                except Exception:
+                    pass
+                for p in subtitle_shape.text_frame.paragraphs:
+                    p.alignment = PP_ALIGN.LEFT
+                    for r in p.runs:
+                        r.font.name = "Arial"
+                        r.font.size = Pt(15)
+                        r.font.bold = False
+                        r.font.italic = False
+                        r.font.color.rgb = RGB_WHITE
+                        self._inject_run_xml(r, "Arial", HEX_WHITE)
+                    self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False)
+
+        elif archetype == SlideArchetype.SECTION_SPLITTER:
+            has_photo = len(pictures) > 0
+            if has_photo:
+                self._fit_picture_in_slot(pictures[0], 6.80, 1.25, 5.50, 5.00)
+                t_w = 5.60
+            else:
+                t_w = 11.50
+
+            if title_shape and title_shape.has_text_frame:
+                try:
+                    title_shape.left = Inches(0.80)
+                    title_shape.top = Inches(2.40)
+                    title_shape.width = Inches(t_w)
+                    title_shape.height = Inches(0.90)
+                except Exception:
+                    pass
+                for p in title_shape.text_frame.paragraphs:
+                    p.alignment = PP_ALIGN.LEFT
+                    for r in p.runs:
+                        r.font.name = "Times New Roman"
+                        r.font.size = Pt(30)
+                        r.font.bold = False
+                        r.font.italic = False
+                        r.font.color.rgb = RGB_CORP_GOLD
+                        self._inject_run_xml(r, "Times New Roman", HEX_CORP_GOLD)
+                    self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
+
+            if subtitle_shape and subtitle_shape != title_shape and subtitle_shape.has_text_frame:
+                try:
+                    subtitle_shape.left = Inches(0.80)
+                    subtitle_shape.top = Inches(3.40)
+                    subtitle_shape.width = Inches(t_w)
+                    subtitle_shape.height = Inches(0.80)
+                except Exception:
+                    pass
+                for p in subtitle_shape.text_frame.paragraphs:
+                    p.alignment = PP_ALIGN.LEFT
+                    for r in p.runs:
+                        r.font.name = "Arial"
+                        r.font.size = Pt(16)
+                        r.font.bold = True
+                        r.font.italic = False
+                        r.font.color.rgb = RGB_WHITE
+                        self._inject_run_xml(r, "Arial", HEX_WHITE)
+                    self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False)
+
+        elif archetype == SlideArchetype.QUOTE_SLIDE:
+            if content_text_shapes:
+                content_text_shapes.sort(key=lambda s: len(s.text_frame.text.strip()), reverse=True)
+                quote_shape = content_text_shapes[0]
+                author_shape = content_text_shapes[1] if len(content_text_shapes) > 1 else None
+
+                try:
+                    quote_shape.left = Inches(1.50)
+                    quote_shape.top = Inches(2.30)
+                    quote_shape.width = Inches(10.33)
+                    quote_shape.height = Inches(2.20)
+                    if hasattr(quote_shape, "fill"):
+                        quote_shape.fill.background()
+                    if hasattr(quote_shape, "line") and quote_shape.line:
+                        quote_shape.line.fill.background()
+                except Exception:
+                    pass
+
+                for p in quote_shape.text_frame.paragraphs:
+                    p.alignment = PP_ALIGN.CENTER
+                    for r in p.runs:
+                        r.font.name = "Times New Roman"
+                        r.font.size = Pt(24)
+                        r.font.bold = False
+                        r.font.italic = False
+                        r.font.color.rgb = RGB_WHITE
+                        self._inject_run_xml(r, "Times New Roman", HEX_WHITE)
+                    self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False, fallback_hex=HEX_WHITE)
+
+                if author_shape and author_shape.has_text_frame:
+                    try:
+                        author_shape.left = Inches(1.50)
+                        author_shape.top = Inches(4.60)
+                        author_shape.width = Inches(10.33)
+                        author_shape.height = Inches(0.60)
+                        if hasattr(author_shape, "fill"):
+                            author_shape.fill.background()
+                        if hasattr(author_shape, "line") and author_shape.line:
+                            author_shape.line.fill.background()
+                    except Exception:
+                        pass
+                    for p in author_shape.text_frame.paragraphs:
+                        p.alignment = PP_ALIGN.CENTER
+                        for r in p.runs:
+                            r.font.name = "Arial"
+                            r.font.size = Pt(14)
+                            r.font.bold = True
+                            r.font.italic = False
+                            r.font.color.rgb = RGB_CORP_GOLD
+                            self._inject_run_xml(r, "Arial", HEX_CORP_GOLD)
+                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False, fallback_hex=HEX_CORP_GOLD)
+
+        elif archetype == SlideArchetype.TEAM_OR_GALLERY_GRID:
+            self._snap_title_top_left(title_shape)
+            k = min(4, len(pictures))
+            pictures.sort(key=lambda p: p.left.inches if hasattr(p, "left") and p.left else 0.0)
+            slot_w = 2.68
+            gap = 0.33
+            start_x = 0.80
+
+            for i, pic in enumerate(pictures[:k]):
+                x_pos = start_x + i * (slot_w + gap)
+                self._fit_picture_in_slot(pic, x_pos, 1.75, slot_w, 2.60)
+
+                matching_texts = [
+                    ts for ts in content_text_shapes
+                    if abs((ts.left.inches if ts.left else 0.0) - x_pos) < 1.6
+                ]
+                matching_texts.sort(key=lambda s: s.top.inches if s.top else 0.0)
+
+                if len(matching_texts) == 1:
+                    ts = matching_texts[0]
+                    try:
+                        ts.left = Inches(x_pos)
+                        ts.top = Inches(4.55)
+                        ts.width = Inches(slot_w)
+                        ts.height = Inches(1.10)
+                        if hasattr(ts, "fill"):
+                            ts.fill.background()
+                        if hasattr(ts, "line") and ts.line:
+                            ts.line.fill.background()
+                    except Exception:
+                        pass
+                    for p_idx, p in enumerate(ts.text_frame.paragraphs):
+                        p.alignment = PP_ALIGN.CENTER
+                        is_name = (p_idx == 0)
+                        target_font = "Arial"
+                        target_pt = Pt(13 if is_name else 11)
+                        target_bold = is_name
+                        target_rgb = RGB_CORP_GOLD if is_name else RGB_WHITE
+                        target_hex = HEX_CORP_GOLD if is_name else HEX_WHITE
+                        for r in p.runs:
+                            r.font.name = target_font
+                            r.font.size = target_pt
+                            r.font.bold = target_bold
+                            r.font.color.rgb = target_rgb
+                            self._inject_run_xml(r, target_font, target_hex)
+                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False, fallback_hex=target_hex)
+
+                elif len(matching_texts) >= 2:
+                    name_box, role_box = matching_texts[0], matching_texts[1]
+                    try:
+                        name_box.left = Inches(x_pos)
+                        name_box.top = Inches(4.55)
+                        name_box.width = Inches(slot_w)
+                        name_box.height = Inches(0.40)
+                        if hasattr(name_box, "fill"):
+                            name_box.fill.background()
+                        if hasattr(name_box, "line") and name_box.line:
+                            name_box.line.fill.background()
+                    except Exception:
+                        pass
+                    for p in name_box.text_frame.paragraphs:
+                        p.alignment = PP_ALIGN.CENTER
+                        for r in p.runs:
+                            r.font.name = "Arial"
+                            r.font.size = Pt(13)
+                            r.font.bold = True
+                            r.font.color.rgb = RGB_CORP_GOLD
+                            self._inject_run_xml(r, "Arial", HEX_CORP_GOLD)
+                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False, fallback_hex=HEX_CORP_GOLD)
+
+                    try:
+                        role_box.left = Inches(x_pos)
+                        role_box.top = Inches(4.95)
+                        role_box.width = Inches(slot_w)
+                        role_box.height = Inches(0.60)
+                        if hasattr(role_box, "fill"):
+                            role_box.fill.background()
+                        if hasattr(role_box, "line") and role_box.line:
+                            role_box.line.fill.background()
+                    except Exception:
+                        pass
+                    for p in role_box.text_frame.paragraphs:
+                        p.alignment = PP_ALIGN.CENTER
+                        for r in p.runs:
+                            r.font.name = "Arial"
+                            r.font.size = Pt(11)
+                            r.font.bold = False
+                            r.font.color.rgb = RGB_WHITE
+                            self._inject_run_xml(r, "Arial", HEX_WHITE)
+                        self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False, fallback_hex=HEX_WHITE)
+
+        elif archetype == SlideArchetype.CLOSING_SLIDE:
+            has_photo = len(pictures) > 0
+            if has_photo:
+                self._fit_picture_in_slot(pictures[0], 6.80, 1.40, 5.50, 4.70)
+                t_w = 5.50
+            else:
+                t_w = 11.50
+
+            if title_shape and title_shape.has_text_frame:
+                try:
+                    title_shape.left = Inches(0.80)
+                    title_shape.top = Inches(2.00)
+                    title_shape.width = Inches(t_w)
+                    title_shape.height = Inches(1.00)
+                except Exception:
+                    pass
+                for p in title_shape.text_frame.paragraphs:
+                    p.alignment = PP_ALIGN.LEFT
+                    for r in p.runs:
+                        r.font.name = "Times New Roman"
+                        r.font.size = Pt(32)
+                        r.font.bold = False
+                        r.font.italic = False
+                        r.font.color.rgb = RGB_CORP_GOLD
+                        self._inject_run_xml(r, "Times New Roman", HEX_CORP_GOLD)
+                    self._inject_para_def_rpr(p, is_title=True, is_bright_bg=False)
+
+            content_text_shapes.sort(key=lambda s: s.top.inches if s.top else 0.0)
+            for c_idx, ts in enumerate(content_text_shapes):
+                c_top = 3.20 + c_idx * 0.55
+                try:
+                    ts.left = Inches(0.80)
+                    ts.top = Inches(c_top)
+                    ts.width = Inches(t_w)
+                    ts.height = Inches(0.50)
+                    if hasattr(ts, "fill"):
+                        ts.fill.background()
+                    if hasattr(ts, "line") and ts.line:
+                        ts.line.fill.background()
+                except Exception:
+                    pass
+                for p in ts.text_frame.paragraphs:
+                    p.alignment = PP_ALIGN.LEFT
+                    for r in p.runs:
+                        r.font.name = "Arial"
+                        r.font.size = Pt(13)
+                        r.font.bold = False
+                        r.font.color.rgb = RGB_WHITE
+                        self._inject_run_xml(r, "Arial", HEX_WHITE)
+                    self._inject_para_def_rpr(p, is_title=False, is_bright_bg=False)
+
+        elif table_shapes:
+            self._snap_title_top_left(title_shape)
             for ts in table_shapes:
                 self._style_table_corporate(ts.table)
 
             if content_text_shapes:
-                # Mixed Text + Table (e.g. Slide 10: Title + 2 intro text boxes + Table)
                 n_intro = len(content_text_shapes)
                 content_text_shapes.sort(key=lambda s: s.left.inches if hasattr(s, "left") and s.left else 0.0)
                 if n_intro == 1:
@@ -796,7 +1205,6 @@ class ArchetypeEngine:
                     content_text_shapes[0].top = Inches(1.45)
                     content_text_shapes[0].width = Inches(11.73)
                     content_text_shapes[0].height = Inches(1.15)
-                    self._inject_necessity_card_if_needed(slide, content_text_shapes[0])
                 elif n_intro >= 2:
                     card_w = 5.70
                     gap = 0.33
@@ -805,9 +1213,7 @@ class ArchetypeEngine:
                         txt_s.top = Inches(1.45)
                         txt_s.width = Inches(card_w)
                         txt_s.height = Inches(1.15)
-                        self._inject_necessity_card_if_needed(slide, txt_s)
 
-                # Table positioned below intro text at top=2.85"
                 for ts in table_shapes:
                     try:
                         ts.left = Inches(0.80)
@@ -818,7 +1224,6 @@ class ArchetypeEngine:
                     except Exception:
                         pass
             else:
-                # Table-only slide: top=1.65", width=11.73", height<=4.8"
                 for ts in table_shapes:
                     try:
                         ts.left = Inches(0.80)
@@ -829,48 +1234,38 @@ class ArchetypeEngine:
                     except Exception:
                         pass
 
-        # Case B2: Image-Only Gallery Slides (e.g. Slide 3: 1 to 4 photos, 0 body text)
-        elif len(pictures) >= 1 and not content_text_shapes and archetype not in (
-            SlideArchetype.COVER_SLIDE,
-            SlideArchetype.CLOSING_SLIDE,
-        ):
-            k = min(4, len(pictures))
-            pictures.sort(key=lambda p: p.left.inches if hasattr(p, "left") and p.left else 0.0)
-            gap_configs = {
-                1: (11.73, 0.0),
-                2: (5.66, 0.40),
-                3: (3.68, 0.34),
-                4: (2.68, 0.33),
-            }
-            slot_w, gap = gap_configs[k]
-            for i, pic in enumerate(pictures[:k]):
-                sx = 0.80 + i * (slot_w + gap)
-                sy = 1.65
-                sh = 4.85
-                self._fit_picture_in_slot(pic, sx, sy, slot_w, sh)
-
-        # Case B3: Content slide with both text blocks AND 1-4 images (e.g. Slides 4, 9)
-        elif 1 <= len(pictures) <= 4 and content_text_shapes and archetype not in (
-            SlideArchetype.COVER_SLIDE,
-            SlideArchetype.CLOSING_SLIDE,
-        ):
-            # Left column: text shapes (left=0.80", width=5.65", top=1.55", height=5.10")
+        elif len(pictures) >= 1 and content_text_shapes:
+            self._snap_title_top_left(title_shape)
             n_cards = len(content_text_shapes)
-            avail_h = 5.10
-            card_h = min(2.4, max(1.0, (avail_h - (n_cards - 1) * 0.25) / n_cards))
             content_text_shapes.sort(key=lambda s: s.top.inches if hasattr(s, "top") and s.top else 0.0)
-            for c_idx, ts in enumerate(content_text_shapes):
-                c_top = 1.55 + c_idx * (card_h + 0.25)
+
+            if n_cards == 1:
+                # Single paragraph split slide (Slide 3 Introduction, Slide 11 Summary)
+                ts = content_text_shapes[0]
                 try:
                     ts.left = Inches(0.80)
-                    ts.top = Inches(c_top)
-                    ts.width = Inches(5.65)
-                    ts.height = Inches(card_h)
+                    ts.top = Inches(1.55)
+                    ts.width = Inches(5.50)
+                    ts.height = Inches(5.10)
+                    if hasattr(ts, "fill"):
+                        ts.fill.background()
+                    if hasattr(ts, "line") and ts.line:
+                        ts.line.fill.background()
                 except Exception:
                     pass
-                self._inject_necessity_card_if_needed(slide, ts)
+            else:
+                avail_h = 5.10
+                card_h = min(2.4, max(1.0, (avail_h - (n_cards - 1) * 0.25) / n_cards))
+                for c_idx, ts in enumerate(content_text_shapes):
+                    c_top = 1.55 + c_idx * (card_h + 0.25)
+                    try:
+                        ts.left = Inches(0.80)
+                        ts.top = Inches(c_top)
+                        ts.width = Inches(5.50)
+                        ts.height = Inches(card_h)
+                    except Exception:
+                        pass
 
-            # Right column: images (left=7.10", width=5.43", top=1.55", height=5.10") with aspect ratio preserved
             num_pics = len(pictures)
             pictures.sort(key=lambda p: p.left.inches if hasattr(p, "left") and p.left else 0.0)
             if num_pics == 1:
@@ -896,12 +1291,26 @@ class ArchetypeEngine:
                         half_h,
                     )
 
-        # Case B4: Multi-card content (zero pictures, 1-4 content cards)
-        elif len(pictures) == 0 and 1 <= len(content_text_shapes) <= 4 and archetype not in (
-            SlideArchetype.COVER_SLIDE,
-            SlideArchetype.CLOSING_SLIDE,
-        ):
-            k = len(content_text_shapes)
+        elif len(pictures) >= 1 and not content_text_shapes:
+            self._snap_title_top_left(title_shape)
+            k = min(4, len(pictures))
+            pictures.sort(key=lambda p: p.left.inches if hasattr(p, "left") and p.left else 0.0)
+            gap_configs = {
+                1: (11.73, 0.0),
+                2: (5.66, 0.40),
+                3: (3.68, 0.34),
+                4: (2.68, 0.33),
+            }
+            slot_w, gap = gap_configs[k]
+            for i, pic in enumerate(pictures[:k]):
+                sx = 0.80 + i * (slot_w + gap)
+                sy = 1.65
+                sh = 4.85
+                self._fit_picture_in_slot(pic, sx, sy, slot_w, sh)
+
+        elif len(pictures) == 0 and content_text_shapes:
+            self._snap_title_top_left(title_shape)
+            k = min(4, len(content_text_shapes))
             card_configs = {
                 1: (11.73, 0.0),
                 2: (5.70, 0.33),
@@ -914,7 +1323,7 @@ class ArchetypeEngine:
             card_h = 5.10
 
             content_text_shapes.sort(key=lambda s: s.left.inches if hasattr(s, "left") and s.left else 0.0)
-            for i, ts in enumerate(content_text_shapes):
+            for i, ts in enumerate(content_text_shapes[:k]):
                 cur_left = start_left + i * (card_w + gap)
                 try:
                     ts.left = Inches(cur_left)
@@ -923,7 +1332,21 @@ class ArchetypeEngine:
                     ts.height = Inches(card_h)
                 except Exception:
                     pass
-                self._inject_necessity_card_if_needed(slide, ts)
+                if k >= 2:
+                    self._inject_necessity_card_if_needed(slide, ts, archetype, n_content_boxes=k)
+
+        # Enforce XML z-order: pictures before text shapes so text is always on top
+        try:
+            spTree = slide.shapes._spTree
+            for p in pictures:
+                for t in content_text_shapes:
+                    if p._element in spTree and t._element in spTree:
+                        p_idx = list(spTree).index(p._element)
+                        t_idx = list(spTree).index(t._element)
+                        if p_idx > t_idx:
+                            t._element.addprevious(p._element)
+        except Exception:
+            pass
 
         # ---------------------------------------------------------------------
         # RULES C & D: Typography & Contrast Enforcement on All Shapes
@@ -931,11 +1354,19 @@ class ArchetypeEngine:
         for shape in list(slide.shapes):
             if getattr(shape, "name", "") == "BrandMorph_Logo_Stamp":
                 continue
+            if _is_footer_or_slidenum(shape):
+                continue
             self._govern_shape_typography_and_contrast(
                 shape, slide_idx, title_shape, subtitle_shape, archetype, default_bg=HEX_CANVAS_NAVY
             )
 
-    def _inject_necessity_card_if_needed(self, slide, ts, slide_w: float = 13.333, slide_h: float = 7.5) -> None:
+    def _inject_necessity_card_if_needed(
+        self, slide, ts, archetype: Optional[SlideArchetype] = None, n_content_boxes: int = 1, slide_w: float = 13.333, slide_h: float = 7.5
+    ) -> None:
+        """Inject clean subtle card containers only for multi-column content with 2-4 cards."""
+        if archetype != SlideArchetype.MULTI_CARD_CONTENT or n_content_boxes < 2:
+            return
+
         try:
             t_l = ts.left.inches if ts.left else 0.8
             t_t = ts.top.inches if ts.top else 1.65
@@ -943,8 +1374,7 @@ class ArchetypeEngine:
             t_h = ts.height.inches if ts.height else 2.5
             t_area = max(0.01, t_w * t_h)
 
-            # 1. Necessity Check: Is ts visually enclosed inside a non-background shape/card (> 60% area)?
-            enclosed = False
+            # Necessity Check: Is ts visually enclosed inside an existing shape?
             for s in slide.shapes:
                 if s == ts or s.has_text_frame or getattr(s, "has_table", False):
                     continue
@@ -965,13 +1395,9 @@ class ArchetypeEngine:
                 if ix2 > ix1 and iy2 > iy1:
                     inter_area = (ix2 - ix1) * (iy2 - iy1)
                     if (inter_area / t_area) > 0.60:
-                        enclosed = True
-                        break
+                        return
 
-            if enclosed:
-                return
-
-            # 2. Dynamic Card Creation (When Needed)
+            # Subtle card: #081E36 fill, thin 0.75pt #1E3A5F border, NO gold bar
             card = slide.shapes.add_shape(
                 MSO_SHAPE.ROUNDED_RECTANGLE,
                 Inches(t_l), Inches(t_t), Inches(t_w), Inches(t_h)
@@ -980,40 +1406,22 @@ class ArchetypeEngine:
             card.fill.solid()
             card.fill.fore_color.rgb = RGBColor(8, 30, 54)  # #081E36
             if hasattr(card, "line") and card.line:
-                card.line.color.rgb = RGBColor(20, 48, 95)  # 1pt #14305F
-                card.line.width = Pt(1.0)
+                card.line.color.rgb = RGBColor(30, 58, 95)  # 0.75pt #1E3A5F
+                card.line.width = Pt(0.75)
 
-            # Thin Gold top accent bar (0.06" height)
-            accent = slide.shapes.add_shape(
-                MSO_SHAPE.RECTANGLE,
-                Inches(t_l), Inches(t_t), Inches(t_w), Inches(0.06)
-            )
-            accent.name = "BrandMorphCardAccent"
-            accent.fill.solid()
-            accent.fill.fore_color.rgb = RGB_CORP_GOLD
-            if hasattr(accent, "line") and accent.line:
-                accent.line.fill.background()
-
-            # CRITICAL Z-ORDER: Place card and accent right before ts._element using addprevious!
-            # Never insert at index 0 or 1 of spTree!
             try:
                 ts._element.addprevious(card._element)
-                ts._element.addprevious(accent._element)
             except Exception:
                 spTree = slide.shapes._spTree
                 if card._element in spTree:
                     spTree.remove(card._element)
-                if accent._element in spTree:
-                    spTree.remove(accent._element)
                 ts_idx = max(2, list(spTree).index(ts._element))
                 spTree.insert(ts_idx, card._element)
-                spTree.insert(ts_idx + 1, accent._element)
 
-            # Set internal padding on the text frame: left + 0.22", top + 0.18", width - 0.44", height - 0.32"
-            ts.left = Inches(t_l + 0.22)
-            ts.top = Inches(t_t + 0.18)
-            ts.width = Inches(max(0.5, t_w - 0.44))
-            ts.height = Inches(max(0.4, t_h - 0.32))
+            ts.left = Inches(t_l + 0.18)
+            ts.top = Inches(t_t + 0.15)
+            ts.width = Inches(max(0.5, t_w - 0.36))
+            ts.height = Inches(max(0.4, t_h - 0.30))
             if hasattr(ts, "fill"):
                 ts.fill.background()
         except Exception:
@@ -1120,7 +1528,9 @@ class ArchetypeEngine:
             p_is_sub = is_sub
             if not is_title and not is_sub:
                 pt_size = p.font.size.pt if p.font and p.font.size else 12.0
-                if (13.0 <= pt_size <= 20.0 or (p.font and p.font.bold)) and len(txt) <= 75:
+                if len(text_frame.paragraphs) > 1 and p == text_frame.paragraphs[0] and len(txt) <= 60:
+                    p_is_sub = True
+                elif (13.0 <= pt_size <= 20.0 or (p.font and p.font.bold)) and len(txt) <= 75:
                     p_is_sub = True
 
             for run in p.runs:
@@ -1244,7 +1654,7 @@ class ArchetypeEngine:
         except Exception:
             pass
 
-    def _inject_para_def_rpr(self, para, is_title: bool, is_bright_bg: bool) -> None:
+    def _inject_para_def_rpr(self, para, is_title: bool, is_bright_bg: bool, fallback_hex: Optional[str] = None) -> None:
         """Inject fallback paragraph default run properties in schema-compliant order."""
         try:
             pPr = para._p.get_or_add_pPr()
@@ -1259,7 +1669,10 @@ class ArchetypeEngine:
 
             solidFill = etree.Element(f"{{{_A}}}solidFill")
             srgb = etree.SubElement(solidFill, f"{{{_A}}}srgbClr")
-            color_hex = HEX_DARK_NAVY if is_bright_bg else (HEX_CORP_GOLD if is_title else HEX_WHITE)
+            if fallback_hex:
+                color_hex = fallback_hex.lstrip("#")
+            else:
+                color_hex = HEX_DARK_NAVY if is_bright_bg else (HEX_CORP_GOLD if is_title else HEX_WHITE)
             srgb.set("val", color_hex)
 
             first_typeface = None

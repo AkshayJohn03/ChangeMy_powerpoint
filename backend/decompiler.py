@@ -6,15 +6,16 @@ from pptx.enum.text import PP_ALIGN
 from typing import Dict, List, Any, Optional, Generator, Tuple
 
 try:
-    from brandmorph.engine.archetype_engine import SlideGraphClassifier
+    from brandmorph.engine.archetype_engine import SlideGraphClassifier, _is_footer_or_slidenum
 except Exception:
     try:
-        from .brandmorph.engine.archetype_engine import SlideGraphClassifier
+        from .brandmorph.engine.archetype_engine import SlideGraphClassifier, _is_footer_or_slidenum
     except Exception:
         try:
-            from backend.brandmorph.engine.archetype_engine import SlideGraphClassifier
+            from backend.brandmorph.engine.archetype_engine import SlideGraphClassifier, _is_footer_or_slidenum
         except Exception:
             SlideGraphClassifier = None
+            _is_footer_or_slidenum = None
 
 # Minimum dimension in inches to avoid zero-division / negative-extent bugs
 _MIN_EXTENT = 0.05
@@ -173,14 +174,52 @@ class SlideDecompiler:
             except Exception:
                 pass
 
+            smartart_processed = False
             for shape, off_left, off_top in self._iter_shapes(slide.shapes):
+                # SmartArt Graphic Frame detection
+                is_gf = hasattr(shape, "_element") and getattr(shape._element, "tag", "").endswith("graphicFrame")
+                if is_gf:
+                    if not getattr(shape, "has_table", False) and not getattr(shape, "has_chart", False):
+                        gf_l = round((shape.left.inches if shape.left else 0.8) * self.scale_x, 3)
+                        gf_t = round((shape.top.inches if shape.top else 1.55) * self.scale_y, 3)
+                        gf_w = round((shape.width.inches if shape.width else 11.73) * self.scale_x, 3)
+                        gf_h = round((shape.height.inches if shape.height else 4.9) * self.scale_y, 3)
+                        sa_nodes = self._extract_smartart_nodes(slide, gf_l, gf_t, gf_w, gf_h)
+                        if sa_nodes:
+                            smartart_processed = True
+                            for sa_node in sa_nodes:
+                                nodes.append(sa_node)
+                                if sa_node.get("type") == "TEXT_CONTAINER" and sa_node.get("paragraphs"):
+                                    for p in sa_node["paragraphs"]:
+                                        if p.get("text"):
+                                            slide_text_accumulator.append(p["text"])
+                            continue
+
                 node = self._extract_shape_data(shape, off_left, off_top, slide=slide)
                 if node:
                     nodes.append(node)
-                    if node.get("type") == "TEXT_CONTAINER" and node.get("paragraphs"):
+                    is_ft = False
+                    if _is_footer_or_slidenum and _is_footer_or_slidenum(shape):
+                        is_ft = True
+                    if not is_ft and node.get("type") == "TEXT_CONTAINER" and node.get("paragraphs"):
                         for p in node["paragraphs"]:
                             if p.get("text"):
                                 slide_text_accumulator.append(p["text"])
+
+            if not smartart_processed:
+                try:
+                    has_diagram = any("drawing" in str(getattr(r, "target_ref", "")).lower() or "diagram" in str(getattr(r, "reltype", "")).lower() for r in slide.part.rels.values())
+                    if has_diagram:
+                        sa_nodes = self._extract_smartart_nodes(slide, 0.80, 1.55, 11.73, 4.90)
+                        if sa_nodes:
+                            for sa_node in sa_nodes:
+                                nodes.append(sa_node)
+                                if sa_node.get("type") == "TEXT_CONTAINER" and sa_node.get("paragraphs"):
+                                    for p in sa_node["paragraphs"]:
+                                        if p.get("text"):
+                                            slide_text_accumulator.append(p["text"])
+                except Exception:
+                    pass
 
             # Layer order: PICTURES at bottom, containers in middle, text on top
             def _layer_priority(n: Dict[str, Any]) -> int:
@@ -219,6 +258,123 @@ class SlideDecompiler:
             parsed_slides.append(slide_ast)
 
         return parsed_slides
+
+    def _extract_smartart_nodes(
+        self, slide, gf_left: float = 0.80, gf_top: float = 1.55, gf_w: float = 11.73, gf_h: float = 4.90
+    ) -> List[Dict[str, Any]]:
+        """Parse SmartArt diagram XML and emit SHAPE and TEXT AST nodes."""
+        nodes = []
+        try:
+            drawing_part = None
+            data_part = None
+            for r in slide.part.rels.values():
+                t = str(getattr(r, "target_ref", "")).lower()
+                rel_type = str(getattr(r, "reltype", "")).lower()
+                if "diagramdrawing" in rel_type or "drawing" in t:
+                    drawing_part = r.target_part
+                if "diagramdata" in rel_type or "data" in t:
+                    data_part = r.target_part
+
+            node_id = 8000
+            if drawing_part and hasattr(drawing_part, "blob"):
+                from lxml import etree
+                root = etree.fromstring(drawing_part.blob)
+                sp_list = root.xpath('.//*[local-name()="sp"]')
+                for sp in sp_list:
+                    tx = ''.join(sp.xpath('.//*[local-name()="t"]/text()')).strip()
+                    off = sp.xpath('.//*[local-name()="off"]')
+                    ext = sp.xpath('.//*[local-name()="ext"]')
+                    if not off or not ext:
+                        continue
+                    x_in = int(off[0].get("x", "0")) / 914400.0
+                    y_in = int(off[0].get("y", "0")) / 914400.0
+                    w_in = int(ext[0].get("cx", "0")) / 914400.0
+                    h_in = int(ext[0].get("cy", "0")) / 914400.0
+
+                    node_x = round(gf_left + x_in * self.scale_x, 3)
+                    node_y = round(gf_top + y_in * self.scale_y, 3)
+                    node_w = round(max(_MIN_EXTENT, w_in * self.scale_x), 3)
+                    node_h = round(max(_MIN_EXTENT, h_in * self.scale_y), 3)
+
+                    if tx:
+                        node_id += 1
+                        is_sub = len(tx) < 35
+                        f_color = "#18181B" if self.raw_mode else ("#FFB81C" if is_sub else "#FFFFFF")
+                        f_face = "Calibri" if self.raw_mode else "Arial"
+                        f_size = 13.0 if is_sub else 11.0
+                        nodes.append({
+                            "id": node_id,
+                            "type": "TEXT_CONTAINER",
+                            "shape_name": "SmartArtText",
+                            "x": node_x,
+                            "y": node_y,
+                            "w": node_w,
+                            "h": node_h,
+                            "bbox": {"left": node_x, "top": node_y, "width": node_w, "height": node_h},
+                            "paragraphs": [{
+                                "text": tx,
+                                "level": 0,
+                                "font_size": f_size,
+                                "font_face": f_face,
+                                "font_color": f_color,
+                                "bold": is_sub if not self.raw_mode else False,
+                                "italic": False,
+                                "align": "LEFT",
+                                "runs": [{"text": tx, "color": f_color, "font_name": f_face, "font_size": f_size, "bold": is_sub, "italic": False}],
+                            }],
+                            "is_title": False,
+                        })
+                    elif w_in > 0.05 and h_in > 0.05:
+                        node_id += 1
+                        nodes.append({
+                            "id": node_id,
+                            "type": "RECTANGLE_SHAPE",
+                            "shape_name": "SmartArtShape",
+                            "x": node_x,
+                            "y": node_y,
+                            "w": node_w,
+                            "h": node_h,
+                            "bbox": {"left": node_x, "top": node_y, "width": node_w, "height": node_h},
+                            "fill_color": "#E2E8F0" if self.raw_mode else "#081E36",
+                            "line_color": "#CBD5E1" if self.raw_mode else "#1E3A5F",
+                        })
+
+            # Fallback if drawing_part had no nodes: extract from data_part
+            if not nodes and data_part and hasattr(data_part, "blob"):
+                from lxml import etree
+                root = etree.fromstring(data_part.blob)
+                texts = [t.text.strip() for t in root.xpath('.//*[local-name()="t"]') if t.text and t.text.strip()]
+                if texts:
+                    step_w = gf_w / len(texts)
+                    for i, txt in enumerate(texts):
+                        node_id += 1
+                        step_x = round(gf_left + i * step_w, 3)
+                        f_color = "#18181B" if self.raw_mode else "#FFB81C"
+                        nodes.append({
+                            "id": node_id,
+                            "type": "TEXT_CONTAINER",
+                            "shape_name": "SmartArtStep",
+                            "x": step_x,
+                            "y": gf_top,
+                            "w": round(step_w * 0.9, 3),
+                            "h": gf_h,
+                            "bbox": {"left": step_x, "top": gf_top, "width": round(step_w * 0.9, 3), "height": gf_h},
+                            "paragraphs": [{
+                                "text": txt,
+                                "level": 0,
+                                "font_size": 12.0,
+                                "font_face": "Calibri" if self.raw_mode else "Arial",
+                                "font_color": f_color,
+                                "bold": True,
+                                "italic": False,
+                                "align": "CENTER",
+                                "runs": [{"text": txt, "color": f_color, "font_name": "Arial", "font_size": 12.0, "bold": True, "italic": False}],
+                            }],
+                            "is_title": False,
+                        })
+        except Exception:
+            pass
+        return nodes
 
     def _extract_shape_data(
         self, shape, offset_left: float = 0.0, offset_top: float = 0.0, slide=None
@@ -327,11 +483,15 @@ class SlideDecompiler:
 
             # 2. Text Container Frame
             if getattr(shape, "has_text_frame", False) and shape.text_frame and shape.text_frame.text.strip():
+                is_footer = False
+                if _is_footer_or_slidenum and _is_footer_or_slidenum(shape):
+                    is_footer = True
+
                 paragraphs = []
-                is_title_frame = (
+                is_title_frame = False if is_footer else (
                     (getattr(shape, "is_placeholder", False) and getattr(shape, "placeholder_format", None) and shape.placeholder_format.type in (1, 3))
-                    or "title" in (getattr(shape, "name", "") or "").lower()
-                    or (top < 1.8 and height < 2.0)
+                    or ("title" in (getattr(shape, "name", "") or "").lower() and "subtitle" not in (getattr(shape, "name", "") or "").lower())
+                    or (top < 1.8 and height < 2.0 and not is_footer)
                 )
 
                 for p in shape.text_frame.paragraphs:
@@ -384,7 +544,20 @@ class SlideDecompiler:
                     except Exception:
                         pass
 
-                    if self.raw_mode:
+                    if is_footer:
+                        if self.raw_mode:
+                            font_color = first_run_color or "#64748B"
+                            font_name = first_run_font or "Calibri"
+                            font_size = first_run_size or 8.5
+                            bold = False
+                            italic = False
+                        else:
+                            font_color = "#94A3B8"
+                            font_name = "Arial"
+                            font_size = 8.5
+                            bold = False
+                            italic = False
+                    elif self.raw_mode:
                         bg_color = self._extract_slide_bg_color(slide) if slide else "#FFFFFF"
                         bg_lum = 1.0
                         try:
@@ -403,10 +576,22 @@ class SlideDecompiler:
                         bold = bool(p.font.bold) if (p.font and p.font.bold is not None) else (first_run_bold or False)
                         italic = bool(p.font.italic) if (p.font and p.font.italic is not None) else (first_run_italic or False)
                     else:
-                        font_color = "#FFB81C" if is_title_frame else "#FFFFFF"
-                        font_name = "Times New Roman" if is_title_frame else "Arial"
-                        font_size = p.font.size.pt if p.font and p.font.size else (28.0 if is_title_frame else 12.0)
-                        bold = False if is_title_frame else (bool(p.font.bold) if p.font else False)
+                        is_sub = (first_run_bold or (first_run_size and 13.0 <= first_run_size <= 16.0) or (len(shape.text_frame.paragraphs) > 1 and p == shape.text_frame.paragraphs[0] and len(txt) <= 60))
+                        if is_title_frame:
+                            font_color = "#FFB81C"
+                            font_name = "Times New Roman"
+                            font_size = p.font.size.pt if p.font and p.font.size else 28.0
+                            bold = False
+                        elif is_sub:
+                            font_color = first_run_color if first_run_color in ("#FFB81C", "#00FFFF", "#00E5FF") else "#FFB81C"
+                            font_name = "Arial"
+                            font_size = p.font.size.pt if p.font and p.font.size else 14.0
+                            bold = True
+                        else:
+                            font_color = first_run_color or "#FFFFFF"
+                            font_name = "Arial"
+                            font_size = p.font.size.pt if p.font and p.font.size else 11.0
+                            bold = False
                         italic = bool(p.font.italic) if p.font else False
 
 

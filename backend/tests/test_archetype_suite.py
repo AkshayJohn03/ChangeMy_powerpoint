@@ -408,11 +408,16 @@ def test_canva_dimension_normalization_and_card_injection(tmp_path):
     p_t.text = "Quarterly Business Operations"
     p_t.font.size = Pt(24)
 
-    # Loose body content text block without a backing card
-    body_box = slide.shapes.add_textbox(Inches(1.0), Inches(2.0), Inches(5.0), Inches(1.5))
+    # Loose multi-column body content text blocks without backing cards
+    body_box = slide.shapes.add_textbox(Inches(0.8), Inches(2.0), Inches(4.2), Inches(1.5))
     p_b = body_box.text_frame.paragraphs[0]
     p_b.text = "Our cloud migration expanded delivery capability across enterprise accounts."
     p_b.font.size = Pt(12)
+
+    body_box2 = slide.shapes.add_textbox(Inches(5.2), Inches(2.0), Inches(4.2), Inches(1.5))
+    p_b2 = body_box2.text_frame.paragraphs[0]
+    p_b2.text = "Engineering platform reliability scaled to 99.99% across global regions."
+    p_b2.font.size = Pt(12)
 
     # Slide 3: Closing slide
     s2 = prs.slides.add_slide(prs.slide_layouts[6])
@@ -643,5 +648,235 @@ def test_13_slide_template_reproduction(tmp_path):
     gov_ast = gov_dec.parse_deck()
     assert raw_ast[0]["background_color"] != gov_ast[0]["background_color"]
     assert gov_ast[0]["background_color"] in ("#001F33", "#030C1E")
+
+
+def test_presentation_1_structure_and_governance(tmp_path: Path):
+    """Verify end-to-end 12-slide template structure matching Presentation 1.pptx."""
+    from brandmorph.engine.archetype_engine import _is_footer_or_slidenum
+
+    deck_path = tmp_path / "presentation_1_replica.pptx"
+    out_path = tmp_path / "morphed_presentation_1.pptx"
+
+    prs = pptx.Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    blank_layout = prs.slide_layouts[6]
+    img_data = _tiny_png_bytes()
+
+    def add_footer(s, num: str):
+        ft = s.shapes.add_textbox(Inches(0.8), Inches(7.0), Inches(4.0), Inches(0.4))
+        ft.name = "Footer Placeholder 1"
+        ft.text_frame.paragraphs[0].text = "PRESENTATION TITLE"
+        sn = s.shapes.add_textbox(Inches(11.8), Inches(7.0), Inches(0.8), Inches(0.4))
+        sn.name = "Slide Number Placeholder 2"
+        sn.text_frame.paragraphs[0].text = num
+
+    # Slide 1: COVER_SLIDE (macaron image on right, title and presenter on left)
+    s1 = prs.slides.add_slide(blank_layout)
+    t1 = s1.shapes.add_textbox(Inches(1.0), Inches(2.0), Inches(5.5), Inches(1.2))
+    t1.text_frame.paragraphs[0].text = "Corporate Presentation Title"
+    sub1 = s1.shapes.add_textbox(Inches(1.0), Inches(3.4), Inches(5.5), Inches(0.8))
+    sub1.text_frame.paragraphs[0].text = "Presenter Name / Title"
+    s1.shapes.add_picture(io.BytesIO(img_data), Inches(7.0), Inches(1.5), Inches(5.0), Inches(4.5))
+
+    # Slide 2: Agenda + 1 image on right
+    s2 = prs.slides.add_slide(blank_layout)
+    t2 = s2.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t2.text_frame.paragraphs[0].text = "Agenda"
+    for i in range(4):
+        b = s2.shapes.add_textbox(Inches(1.0), Inches(1.8 + i * 1.1), Inches(4.5), Inches(0.8))
+        b.text_frame.paragraphs[0].text = f"Agenda item 0{i+1}"
+    s2.shapes.add_picture(io.BytesIO(img_data), Inches(6.0), Inches(1.8), Inches(4.5), Inches(4.5))
+    add_footer(s2, "2")
+
+    # Slide 3: Introduction + 2 photos
+    s3 = prs.slides.add_slide(blank_layout)
+    t3 = s3.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t3.text_frame.paragraphs[0].text = "Introduction"
+    b3 = s3.shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(5.0), Inches(2.5))
+    b3.text_frame.paragraphs[0].text = "Strategic overview of enterprise business model and operations."
+    s3.shapes.add_picture(io.BytesIO(img_data), Inches(6.5), Inches(1.8), Inches(3.0), Inches(3.0))
+    s3.shapes.add_picture(io.BytesIO(img_data), Inches(9.8), Inches(1.8), Inches(3.0), Inches(3.0))
+    add_footer(s3, "3")
+
+    # Slide 4: SECTION_SPLITTER ("TOPIC ONE", Subtitle, 1 photo)
+    s4 = prs.slides.add_slide(blank_layout)
+    t4 = s4.shapes.add_textbox(Inches(1.0), Inches(2.2), Inches(5.5), Inches(1.0))
+    t4.text_frame.paragraphs[0].text = "TOPIC ONE"
+    sub4 = s4.shapes.add_textbox(Inches(1.0), Inches(3.3), Inches(5.5), Inches(0.8))
+    sub4.text_frame.paragraphs[0].text = "SUBTITLE"
+    s4.shapes.add_picture(io.BytesIO(img_data), Inches(7.0), Inches(1.5), Inches(5.0), Inches(4.5))
+    add_footer(s4, "4")
+
+    # Slide 5: DATA_TABLE_SLIDE
+    s5 = prs.slides.add_slide(blank_layout)
+    t5 = s5.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t5.text_frame.paragraphs[0].text = "Financial Table"
+    tbl5 = s5.shapes.add_table(4, 3, Inches(0.8), Inches(1.8), Inches(11.0), Inches(4.0))
+    for r in range(4):
+        for c in range(3):
+            tbl5.table.cell(r, c).text = f"Cell {r}-{c}"
+    add_footer(s5, "5")
+
+    # Slide 6: QUOTE_SLIDE (Quote only + author, no title placeholder)
+    s6 = prs.slides.add_slide(blank_layout)
+    q6 = s6.shapes.add_textbox(Inches(1.5), Inches(2.2), Inches(10.0), Inches(2.0))
+    q6.text_frame.paragraphs[0].text = '"The way to get started is to quit talking and begin doing."'
+    a6 = s6.shapes.add_textbox(Inches(1.5), Inches(4.5), Inches(10.0), Inches(0.6))
+    a6.text_frame.paragraphs[0].text = "Walt Disney"
+    add_footer(s6, "6")
+
+    # Slide 7: TEAM_OR_GALLERY_GRID (4 headshots + 4 names/titles directly underneath)
+    s7 = prs.slides.add_slide(blank_layout)
+    t7 = s7.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t7.text_frame.paragraphs[0].text = "Our Team"
+    for i in range(4):
+        x = 0.85 + i * 3.0
+        s7.shapes.add_picture(io.BytesIO(img_data), Inches(x), Inches(1.75), Inches(2.5), Inches(2.6))
+        txt_box = s7.shapes.add_textbox(Inches(x), Inches(4.55), Inches(2.5), Inches(1.1))
+        p_name = txt_box.text_frame.paragraphs[0]
+        p_name.text = f"Leader {i+1}"
+        p_role = txt_box.text_frame.add_paragraph()
+        p_role.text = f"Director of Operations {i+1}"
+    add_footer(s7, "7")
+
+    # Slide 8: Timeline
+    s8 = prs.slides.add_slide(blank_layout)
+    t8 = s8.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t8.text_frame.paragraphs[0].text = "Timeline"
+    for i in range(4):
+        x = 0.8 + i * 2.8
+        card = s8.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(2.2), Inches(2.5), Inches(3.0))
+        card.text_frame.paragraphs[0].text = f"Phase {i+1}"
+    add_footer(s8, "8")
+
+    # Slide 9: MULTI_CARD_CONTENT (2 columns, Subtitle + Body)
+    s9 = prs.slides.add_slide(blank_layout)
+    t9 = s9.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t9.text_frame.paragraphs[0].text = "Market Opportunities"
+    for i in range(2):
+        x = 0.8 + i * 6.0
+        col = s9.shapes.add_textbox(Inches(x), Inches(2.0), Inches(5.5), Inches(3.5))
+        p_sub = col.text_frame.paragraphs[0]
+        p_sub.text = f"Strategic Pillar 0{i+1}"
+        p_sub.font.bold = True
+        p_sub.font.size = Pt(14)
+        p_body = col.text_frame.add_paragraph()
+        p_body.text = "Comprehensive analysis of addressable market segments and operational capabilities."
+        p_body.font.size = Pt(11)
+    add_footer(s9, "9")
+
+    # Slide 10: MULTI_CARD_CONTENT (3 columns, Subtitle + Body)
+    s10 = prs.slides.add_slide(blank_layout)
+    t10 = s10.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t10.text_frame.paragraphs[0].text = "Operational Pillars"
+    for i in range(3):
+        x = 0.8 + i * 4.0
+        col = s10.shapes.add_textbox(Inches(x), Inches(2.0), Inches(3.6), Inches(3.5))
+        p_sub = col.text_frame.paragraphs[0]
+        p_sub.text = f"Pillar {i+1}"
+        p_body = col.text_frame.add_paragraph()
+        p_body.text = "Driving efficiency and scalable processes."
+    add_footer(s10, "10")
+
+    # Slide 11: Summary
+    s11 = prs.slides.add_slide(blank_layout)
+    t11 = s11.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(8.0), Inches(0.8))
+    t11.text_frame.paragraphs[0].text = "Executive Summary"
+    b11 = s11.shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(5.5), Inches(3.0))
+    b11.text_frame.paragraphs[0].text = "Summary of core deliverables and organizational readiness."
+    s11.shapes.add_picture(io.BytesIO(img_data), Inches(7.0), Inches(1.8), Inches(5.0), Inches(4.5))
+    add_footer(s11, "11")
+
+    # Slide 12: CLOSING_SLIDE (THANK YOU + Contact Info + Cupcakes image)
+    s12 = prs.slides.add_slide(blank_layout)
+    t12 = s12.shapes.add_textbox(Inches(1.0), Inches(2.0), Inches(5.5), Inches(1.0))
+    t12.text_frame.paragraphs[0].text = "THANK YOU"
+    c12 = s12.shapes.add_textbox(Inches(1.0), Inches(3.2), Inches(5.5), Inches(1.5))
+    c12.text_frame.paragraphs[0].text = "contact@brandmorph.com\nwww.brandmorph.com"
+    s12.shapes.add_picture(io.BytesIO(img_data), Inches(7.0), Inches(1.5), Inches(5.0), Inches(4.5))
+    add_footer(s12, "12")
+
+    prs.save(str(deck_path))
+    assert len(prs.slides) == 12
+
+    # Step A & B: Decompile raw slides
+    raw_dec = SlideDecompiler(str(deck_path), raw_mode=True)
+    raw_ast = raw_dec.parse_deck()
+    assert len(raw_ast) == 12
+    assert raw_ast[0]["background_color"] == "#FFFFFF"
+
+    # Step C: Morph deck
+    dna = BrandDNA.load("enterprise_navy")
+    MorphPipeline(dna).run(deck_path, out_path)
+
+    # Step D: Decompile morphed slides
+    morphed_dec = SlideDecompiler(str(out_path), raw_mode=False)
+    morphed_ast = morphed_dec.parse_deck()
+    assert len(morphed_ast) == 12
+
+    # Load output presentation
+    m_prs = pptx.Presentation(str(out_path))
+
+    # Assert 1: Zero card shapes injected around "PRESENTATION TITLE" or slide numbers 2..12
+    for s_idx, slide in enumerate(m_prs.slides):
+        for shape in slide.shapes:
+            if getattr(shape, "name", "") == "BrandMorphInjectedCard":
+                assert shape.top.inches < 6.8, f"Slide {s_idx+1} injected card at footer y={shape.top.inches}"
+
+    # Assert 2: Slides 1, 4, 6, 7, 12 have 0 injected backing cards
+    for idx in (0, 3, 5, 6, 11):
+        slide = m_prs.slides[idx]
+        injected_cards = [s for s in slide.shapes if getattr(s, "name", "") == "BrandMorphInjectedCard"]
+        assert len(injected_cards) == 0, f"Slide {idx+1} has {len(injected_cards)} unexpected injected cards"
+
+        # Assert images do not overlap text
+        pics = [s for s in slide.shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE or hasattr(s, "image")]
+        texts = [s for s in slide.shapes if s.has_text_frame and not getattr(s, "name", "").startswith("BrandMorph") and not _is_footer_or_slidenum(s)]
+        for pic in pics:
+            p_l = pic.left.inches
+            p_t = pic.top.inches
+            p_r = p_l + pic.width.inches
+            p_b = p_t + pic.height.inches
+            for ts in texts:
+                t_l = ts.left.inches
+                t_t = ts.top.inches
+                t_r = t_l + ts.width.inches
+                t_b = t_t + ts.height.inches
+                horiz_overlap = not (t_r <= p_l + 0.1 or p_r <= t_l + 0.1)
+                vert_overlap = not (t_b <= p_t + 0.1 or p_b <= t_t + 0.1)
+                assert not (horiz_overlap and vert_overlap), f"Slide {idx+1} text '{ts.text_frame.text[:20]}' overlaps picture"
+
+    # Assert 3: Slide 6 (QUOTE_SLIDE) quote text is centered body content and NOT top-left title
+    m_s6 = m_prs.slides[5]
+    quote_shape = [s for s in m_s6.shapes if s.has_text_frame and "started" in s.text_frame.text][0]
+    assert quote_shape.top.inches >= 1.8, f"Quote shape top is {quote_shape.top.inches}, expected >= 1.8"
+    assert quote_shape.left.inches >= 1.0, f"Quote shape left is {quote_shape.left.inches}, expected centered >= 1.0"
+
+    # Assert 4: Slide 7 (TEAM_OR_GALLERY_GRID) Name/Title sits directly under each photo with no fill
+    m_s7 = m_prs.slides[6]
+    for shape in m_s7.shapes:
+        if shape.has_text_frame and "Leader" in shape.text_frame.text:
+            assert shape.top.inches >= 4.0, f"Team text top is {shape.top.inches}, expected >= 4.0"
+            assert not (shape.fill and shape.fill.type == 1 and shape.fill.fore_color.rgb == RGBColor(8, 30, 54)), "Team text box has backing fill"
+
+    # Assert 5: Slide 9 (MULTI_CARD_CONTENT) Subtitle is Gold #FFB81C or Cyan #00FFFF, body is White #FFFFFF
+    m_s9 = m_prs.slides[8]
+    s9_cols = [s for s in m_s9.shapes if s.has_text_frame and "Pillar" in s.text_frame.text]
+    assert len(s9_cols) >= 2
+    for col in s9_cols:
+        tf = col.text_frame
+        p_sub = tf.paragraphs[0]
+        sub_hex = str(p_sub.runs[0].font.color.rgb).upper()
+        assert sub_hex in ("FFB81C", "00FFFF", "00E5FF"), f"Expected sub hex FFB81C or Cyan, got {sub_hex}"
+        assert p_sub.runs[0].font.bold is True
+
+        p_body = tf.paragraphs[1]
+        body_hex = str(p_body.runs[0].font.color.rgb).upper()
+        assert body_hex in ("FFFFFF", "F2F6FC"), f"Expected body hex FFFFFF, got {body_hex}"
+
+    # Assert 6: Raw mode AST has #FFFFFF background and dark text; morphed AST has #001F33 or #030C1E
+    assert raw_ast[0]["background_color"] == "#FFFFFF"
+    assert morphed_ast[0]["background_color"] in ("#001F33", "#030C1E")
 
 
