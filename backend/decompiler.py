@@ -41,6 +41,76 @@ class SlideDecompiler:
         self.slide_height = 7.5
         self.scale_x = 13.333 / self.orig_width if self.orig_width > 0 else 1.0
         self.scale_y = 7.5 / self.orig_height if self.orig_height > 0 else 1.0
+        self.theme_colors: Dict[str, str] = self._load_theme_colors()
+
+    def _load_theme_colors(self) -> Dict[str, str]:
+        """Extract color scheme from ppt/theme/theme*.xml parts."""
+        theme_colors: Dict[str, str] = {}
+        try:
+            from lxml import etree
+            # 1. Check presentation relationships
+            for rel in getattr(self.prs.part, "rels", {}).values():
+                t = str(getattr(rel, "target_ref", "")).lower()
+                rel_type = str(getattr(rel, "reltype", "")).lower()
+                if "theme" in t or "theme" in rel_type:
+                    theme_part = getattr(rel, "target_part", None)
+                    if theme_part and hasattr(theme_part, "blob"):
+                        root = etree.fromstring(theme_part.blob)
+                        for clr_node in root.xpath('.//*[local-name()="clrScheme"]/*'):
+                            tag = etree.QName(clr_node).localname
+                            srgb = clr_node.xpath('.//*[local-name()="srgbClr"]/@val')
+                            if srgb:
+                                theme_colors[tag] = f"#{srgb[0].upper()}"
+                            else:
+                                sys_clr = clr_node.xpath('.//*[local-name()="sysClr"]/@lastClr')
+                                if sys_clr:
+                                    theme_colors[tag] = f"#{sys_clr[0].upper()}"
+
+            # 2. Check slide masters
+            for master in getattr(self.prs, "slide_masters", []):
+                for rel in getattr(master.part, "rels", {}).values():
+                    t = str(getattr(rel, "target_ref", "")).lower()
+                    rel_type = str(getattr(rel, "reltype", "")).lower()
+                    if "theme" in t or "theme" in rel_type:
+                        theme_part = getattr(rel, "target_part", None)
+                        if theme_part and hasattr(theme_part, "blob"):
+                            root = etree.fromstring(theme_part.blob)
+                            for clr_node in root.xpath('.//*[local-name()="clrScheme"]/*'):
+                                tag = etree.QName(clr_node).localname
+                                srgb = clr_node.xpath('.//*[local-name()="srgbClr"]/@val')
+                                if srgb:
+                                    theme_colors[tag] = f"#{srgb[0].upper()}"
+                                else:
+                                    sys_clr = clr_node.xpath('.//*[local-name()="sysClr"]/@lastClr')
+                                    if sys_clr:
+                                        theme_colors[tag] = f"#{sys_clr[0].upper()}"
+        except Exception:
+            pass
+        return theme_colors
+
+    def _resolve_xml_fill_color(self, elem) -> Optional[str]:
+        """Resolve hex color from a DrawingML fill element including schemeClr references."""
+        if elem is None:
+            return None
+        try:
+            # If elem contains <p:bg>, scope specifically to <p:bg> to avoid child spTree text colors
+            bg_target = elem.xpath('.//*[local-name()="bg"]')
+            search_scope = bg_target[0] if bg_target else elem
+
+            srgb = search_scope.xpath('.//*[local-name()="srgbClr"]/@val')
+            if srgb:
+                return f"#{srgb[0].upper()}"
+            scheme = search_scope.xpath('.//*[local-name()="schemeClr"]/@val')
+            if scheme:
+                s_val = scheme[0]
+                mapped = {"bg1": "lt1", "tx1": "dk1", "bg2": "lt2", "tx2": "dk2"}.get(s_val, s_val)
+                if mapped in self.theme_colors:
+                    return self.theme_colors[mapped]
+                if s_val in self.theme_colors:
+                    return self.theme_colors[s_val]
+        except Exception:
+            pass
+        return None
 
     @staticmethod
     def _iter_shapes(
@@ -72,6 +142,11 @@ class SlideDecompiler:
                     c = _color_to_hex(fill.fore_color)
                     if c:
                         return c
+            if hasattr(slide, "background") and getattr(slide.background, "_element", None) is not None:
+                c = self._resolve_xml_fill_color(slide.background._element)
+                if c:
+                    return c
+
             # 2. Slide layout background
             if hasattr(slide, "slide_layout") and slide.slide_layout:
                 layout = slide.slide_layout
@@ -81,6 +156,11 @@ class SlideDecompiler:
                         c = _color_to_hex(fill.fore_color)
                         if c:
                             return c
+                if hasattr(layout, "background") and getattr(layout.background, "_element", None) is not None:
+                    c = self._resolve_xml_fill_color(layout.background._element)
+                    if c:
+                        return c
+
             # 3. Slide master background
             if hasattr(slide, "slide_layout") and hasattr(slide.slide_layout, "slide_master"):
                 master = slide.slide_layout.slide_master
@@ -90,6 +170,11 @@ class SlideDecompiler:
                         c = _color_to_hex(fill.fore_color)
                         if c:
                             return c
+                if master and hasattr(master, "background") and getattr(master.background, "_element", None) is not None:
+                    c = self._resolve_xml_fill_color(master.background._element)
+                    if c:
+                        return c
+
             # 4. Check for full-bleed background shape on slide
             for shp in slide.shapes:
                 try:
@@ -100,6 +185,11 @@ class SlideDecompiler:
                     if s_left <= 0.2 and s_top <= 0.2 and s_w >= (self.orig_width - 0.5) and s_h >= (self.orig_height - 0.5):
                         if shp.fill and shp.fill.type == MSO_FILL.SOLID and hasattr(shp.fill, "fore_color"):
                             c = _color_to_hex(shp.fill.fore_color)
+                            if c:
+                                return c
+                        elem = getattr(shp, "_element", None)
+                        if elem is not None:
+                            c = self._resolve_xml_fill_color(elem)
                             if c:
                                 return c
                 except Exception:
@@ -174,6 +264,33 @@ class SlideDecompiler:
             except Exception:
                 pass
 
+            # In raw_mode, extract decorative/background shapes from slide_layout and slide_master
+            if self.raw_mode and hasattr(slide, "slide_layout") and slide.slide_layout:
+                layout = slide.slide_layout
+                follow_master = getattr(slide, "follow_master_background", True) is not False
+
+                # 1. Slide Layout non-placeholder decorative shapes
+                for shp, off_left, off_top in self._iter_shapes(layout.shapes):
+                    if getattr(shp, "is_placeholder", False):
+                        continue
+                    bg_node = self._extract_shape_data(shp, off_left, off_top, slide=slide)
+                    if bg_node:
+                        bg_node["is_layout_bg"] = True
+                        nodes.append(bg_node)
+
+                # 2. Slide Master non-placeholder shapes if follow_master
+                if follow_master and hasattr(layout, "slide_master") and layout.slide_master:
+                    master = layout.slide_master
+                    layout_bg_count = len([n for n in nodes if n.get("is_layout_bg")])
+                    if layout_bg_count == 0:
+                        for shp, off_left, off_top in self._iter_shapes(master.shapes):
+                            if getattr(shp, "is_placeholder", False):
+                                continue
+                            bg_node = self._extract_shape_data(shp, off_left, off_top, slide=slide)
+                            if bg_node:
+                                bg_node["is_layout_bg"] = True
+                                nodes.append(bg_node)
+
             smartart_processed = False
             for shape, off_left, off_top in self._iter_shapes(slide.shapes):
                 # SmartArt Graphic Frame detection
@@ -221,8 +338,10 @@ class SlideDecompiler:
                 except Exception:
                     pass
 
-            # Layer order: PICTURES at bottom, containers in middle, text on top
+            # Layer order: layout background at bottom (-1), PICTURES next (0), containers (1), tables/charts (2), text on top (3)
             def _layer_priority(n: Dict[str, Any]) -> int:
+                if n.get("is_layout_bg"):
+                    return -1
                 t = n.get("type")
                 if t in ("PICTURE", "IMAGE"):
                     return 0
@@ -435,6 +554,27 @@ class SlideDecompiler:
                 base_data["line_hex"] = line_hex
                 base_data["line_color"] = line_hex
 
+            # Geometry & Preset Shape Detection (<a:prstGeom prst="...">)
+            tag_elem = getattr(shape, "_element", None)
+            if tag_elem is not None:
+                prst = tag_elem.xpath('.//*[local-name()="prstGeom"]/@prst')
+                if prst:
+                    base_data["geom_type"] = prst[0]
+
+                # Custom & Circular Crop Masks (<a:srcRect>)
+                src_rects = tag_elem.xpath('.//*[local-name()="srcRect"]')
+                if src_rects:
+                    sr = src_rects[0]
+                    try:
+                        base_data["crop"] = {
+                            "l": int(sr.get("l", "0")) / 100000.0,
+                            "t": int(sr.get("t", "0")) / 100000.0,
+                            "r": int(sr.get("r", "0")) / 100000.0,
+                            "b": int(sr.get("b", "0")) / 100000.0,
+                        }
+                    except Exception:
+                        pass
+
             # Check for bottom frame
             if "BrandMorphBottomFrame" in shape_name_str or "BrandMorphAccentLine" in shape_name_str:
                 base_data["type"] = "RECTANGLE_SHAPE"
@@ -616,10 +756,12 @@ class SlideDecompiler:
             # 3. Geometric Shapes / Arrows / Containers
             if shape_type in (MSO_SHAPE_TYPE.AUTO_SHAPE, MSO_SHAPE_TYPE.FREEFORM):
                 shape_enum_str = str(getattr(shape, 'auto_shape_type', 'RECTANGLE'))
-                if "ARROW" in shape_enum_str or "CHEVRON" in shape_enum_str:
+                geom = (base_data.get("geom_type") or "").lower()
+                if "ARROW" in shape_enum_str or "CHEVRON" in shape_enum_str or geom in ("chevron", "rightarrow"):
                     base_data["type"] = "ARROW_SHAPE"
-                elif "OVAL" in shape_enum_str or "CIRCLE" in shape_enum_str:
+                elif "OVAL" in shape_enum_str or "CIRCLE" in shape_enum_str or geom in ("ellipse", "oval"):
                     base_data["type"] = "OVAL_SHAPE"
+                    base_data["geom_type"] = "ellipse"
                 else:
                     base_data["type"] = "RECTANGLE_SHAPE"
 

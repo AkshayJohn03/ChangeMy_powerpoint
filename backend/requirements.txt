@@ -10,3 +10,6 @@ PyYAML
 httpx
 pytest
 ruff
+onnxruntime
+safetensors
+numpy

@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import os
 import json
+from pathlib import Path
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 from lxml import etree
@@ -57,6 +58,47 @@ class SlideArchetype(str, Enum):
     MULTI_CARD_CONTENT = "Multi-Card Content"
     CLOSING_SLIDE = "Closing Slide"
     QUOTE_SLIDE = "Quote Slide"
+
+
+GNN_ARCHETYPE_MAP = {
+    0: SlideArchetype.COVER_SLIDE,
+    1: SlideArchetype.AGENDA_SLIDE,
+    2: SlideArchetype.SECTION_SPLITTER,
+    3: SlideArchetype.MULTI_CARD_CONTENT,
+    4: SlideArchetype.PROCESS_TIMELINE,
+    5: SlideArchetype.TEAM_OR_GALLERY_GRID,
+    6: SlideArchetype.DATA_TABLE_SLIDE,
+    7: SlideArchetype.QUOTE_SLIDE,
+    8: SlideArchetype.CLOSING_SLIDE,
+}
+
+_GNN_SESSION = None
+
+
+def _get_slide_gnn_session():
+    global _GNN_SESSION
+    if _GNN_SESSION is not None:
+        return _GNN_SESSION
+    try:
+        import onnxruntime as ort
+
+        candidates = [
+            os.environ.get("SLIDE_GNN_MODEL_PATH"),
+            str(Path(__file__).resolve().parent.parent.parent / "models" / "slide_gnn.onnx"),
+            str(Path(__file__).resolve().parent.parent / "models" / "slide_gnn.onnx"),
+            str(Path.cwd() / "backend" / "models" / "slide_gnn.onnx"),
+            str(Path.cwd() / "models" / "slide_gnn.onnx"),
+        ]
+        for p in candidates:
+            if p and os.path.exists(p):
+                opts = ort.SessionOptions()
+                opts.intra_op_num_threads = 1
+                opts.inter_op_num_threads = 1
+                _GNN_SESSION = ort.InferenceSession(p, sess_options=opts, providers=["CPUExecutionProvider"])
+                return _GNN_SESSION
+    except Exception:
+        pass
+    return None
 
 
 def _is_footer_or_slidenum(shape, slide_h: float = 7.5) -> bool:
@@ -272,15 +314,122 @@ class SlideGraphClassifier:
         return features
 
     @classmethod
+    def extract_slide_graph(cls, slide) -> Tuple[Any, Any]:
+        """Extract node feature tensor (N, 16) and normalized spatial adjacency (N, N)."""
+        import numpy as np
+
+        slide_w = 13.333
+        slide_h = 7.5
+        try:
+            if hasattr(slide, "part") and slide.part:
+                if getattr(slide.part, "slide_width", None):
+                    slide_w = slide.part.slide_width.inches
+                if getattr(slide.part, "slide_height", None):
+                    slide_h = slide.part.slide_height.inches
+        except Exception:
+            pass
+
+        nodes = []
+        positions = []
+
+        for shape in slide.shapes:
+            try:
+                raw_l = shape.left.inches if (hasattr(shape, "left") and shape.left is not None) else 0.5
+                raw_t = shape.top.inches if (hasattr(shape, "top") and shape.top is not None) else 0.5
+                raw_w = shape.width.inches if (hasattr(shape, "width") and shape.width is not None) else 2.0
+                raw_h = shape.height.inches if (hasattr(shape, "height") and shape.height is not None) else 1.0
+
+                x = max(0.0, min(1.0, raw_l / slide_w))
+                y = max(0.0, min(1.0, raw_t / slide_h))
+                w = max(0.01, min(1.0, raw_w / slide_w))
+                h = max(0.01, min(1.0, raw_h / slide_h))
+
+                is_text = 1.0 if getattr(shape, "has_text_frame", False) and shape.text_frame and shape.text_frame.text.strip() else 0.0
+                is_pic = 0.0
+                try:
+                    if getattr(shape, "shape_type", None) == MSO_SHAPE_TYPE.PICTURE or hasattr(shape, "image"):
+                        if getattr(shape, "image", None) is not None:
+                            is_pic = 1.0
+                except Exception:
+                    pass
+                if not is_pic:
+                    try:
+                        if hasattr(shape, "_element") and shape._element.xpath('.//*[local-name()="blip"]'):
+                            is_pic = 1.0
+                    except Exception:
+                        pass
+
+                is_shape = 1.0 if (getattr(shape, "shape_type", None) in (MSO_SHAPE_TYPE.AUTO_SHAPE, MSO_SHAPE_TYPE.FREEFORM)) else 0.0
+                is_table = 1.0 if (getattr(shape, "has_table", False) and shape.has_table) else 0.0
+
+                font_sz = 0.0
+                bold = 0.0
+                text_len = 0.0
+                word_cnt = 0.0
+                if is_text:
+                    font_sz = 14.0
+                    txt = shape.text_frame.text.strip()
+                    text_len = float(len(txt))
+                    word_cnt = float(len(txt.split()))
+                    if shape.text_frame.paragraphs:
+                        for p in shape.text_frame.paragraphs:
+                            if p.font and p.font.size and p.font.size.pt:
+                                font_sz = max(font_sz, float(p.font.size.pt))
+                            if p.font and p.font.bold:
+                                bold = 1.0
+
+                feat = [
+                    x, y, w, h,
+                    w * h,
+                    min(1.0, (w / (h + 1e-4)) / 8.0),
+                    is_text, is_pic, is_shape, is_table,
+                    min(1.0, font_sz / 40.0),
+                    bold,
+                    min(1.0, math.log1p(text_len) / 6.0),
+                    min(1.0, math.log1p(word_cnt) / 4.0),
+                    1.0 if y < 0.25 else 0.0,
+                    1.0 if y > 0.72 else 0.0,
+                ]
+                nodes.append(feat)
+                positions.append((x + w / 2.0, y + h / 2.0))
+            except Exception:
+                continue
+
+        if not nodes:
+            nodes = [[0.1, 0.1, 0.8, 0.8, 0.64, 0.125, 1.0, 0.0, 0.0, 0.0, 0.35, 1.0, 0.5, 0.5, 1.0, 0.0]]
+            positions = [(0.5, 0.5)]
+
+        X = np.array(nodes, dtype=np.float32)
+        n = len(positions)
+        if n == 1:
+            A_norm = np.ones((1, 1), dtype=np.float32)
+        else:
+            A = np.zeros((n, n), dtype=np.float32)
+            for i in range(n):
+                xi, yi = positions[i]
+                for j in range(n):
+                    if i == j:
+                        A[i, j] = 1.0
+                    else:
+                        xj, yj = positions[j]
+                        dist = math.sqrt((xi - xj) ** 2 + (yi - yj) ** 2)
+                        A[i, j] = math.exp(-dist / 0.35)
+            deg = np.sum(A, axis=1)
+            deg_inv_sqrt = np.power(np.maximum(deg, 1e-6), -0.5)
+            D_inv = np.diag(deg_inv_sqrt)
+            A_norm = (D_inv @ A @ D_inv).astype(np.float32)
+
+        return X, A_norm
+
+    @classmethod
     def classify(cls, slide, slide_idx: int, total_slides: int) -> SlideArchetype:
-        """Classify slide using 16D graph features and golden_brain.json weights if present."""
+        """Classify slide using 16D graph features, SlideGNN ONNX model, and symbolic guardrails."""
         feats = cls.extract_16d_features(slide, slide_idx, total_slides)
 
         # -----------------------------------------------------------------
         # NEURO-SYMBOLIC CONSENSUS CHECK (Corporate DNA Golden Pair Guard)
         # 1. Slide index 0 is strictly COVER_SLIDE
         # 2. Any slide containing a Table is strictly DATA_TABLE_SLIDE
-        # 3. >=3 timeline nodes or horizontal sequence is strictly PROCESS_TIMELINE
         # -----------------------------------------------------------------
         if slide_idx == 0:
             return SlideArchetype.COVER_SLIDE
@@ -288,11 +437,6 @@ class SlideGraphClassifier:
         has_table_shape = feats[3] > 0.5 or any(getattr(s, "has_table", False) and s.has_table for s in slide.shapes)
         if has_table_shape:
             return SlideArchetype.DATA_TABLE_SLIDE
-
-        h_seq = feats[8] >= 3.0
-        timeline_kw = feats[7] > 0.5
-        if h_seq or (timeline_kw and feats[12] >= 3):
-            return SlideArchetype.PROCESS_TIMELINE
 
         # Check for Quote Slide:
         # Non-cover slide where only content is a quote + optional author
@@ -326,34 +470,6 @@ class SlideGraphClassifier:
             if len(longest_txt) >= 35 or '"' in longest_txt or '“' in longest_txt or '”' in longest_txt:
                 has_quote = True
 
-        if has_quote and feats[9] <= 0.5 and feats[10] <= 0.5:
-            return SlideArchetype.QUOTE_SLIDE
-
-        # Check for external golden_brain.json weights
-        weights_paths = [
-            os.path.join(os.path.dirname(__file__), "golden_brain.json"),
-            os.path.join(os.path.dirname(__file__), "..", "..", "brands", "golden_brain.json"),
-        ]
-        for wp in weights_paths:
-            if os.path.exists(wp):
-                try:
-                    with open(wp, "r", encoding="utf-8") as f:
-                        brain = json.load(f)
-                    if "archetypes" in brain and "weights" in brain:
-                        # Linear projection scoring if brain model is provided
-                        scores = {}
-                        for arch_name, w_vec in brain["weights"].items():
-                            bias = brain.get("biases", {}).get(arch_name, 0.0)
-                            scores[arch_name] = sum(f * w for f, w in zip(feats, w_vec)) + bias
-                        best_arch = max(scores, key=scores.get)
-                        for member in SlideArchetype:
-                            if member.name == best_arch or member.value == best_arch:
-                                return member
-                except Exception:
-                    pass
-
-        # High-precision deterministic decision graph based on 16D features
-        has_table = feats[3] > 0.5
         pic_count = feats[5]
         pic_row = feats[6] > 0.5
         timeline_kw = feats[7] > 0.5
@@ -366,39 +482,76 @@ class SlideGraphClassifier:
         caption_pairs = feats[14] >= 3.0
         is_splitter = feats[15] > 0.5
 
-        # 1. Table slide
-        if has_table:
-            return SlideArchetype.DATA_TABLE_SLIDE
-
-        # 2. Cover slide
-        if slide_idx == 0 or (feats[1] > 0.5 and text_count <= 2 and not is_last):
-            return SlideArchetype.COVER_SLIDE
-
-        # 3. Closing slide
+        # Symbolic Guardrails
         if closing_kw or (is_last and text_count <= 3 and not h_seq):
             return SlideArchetype.CLOSING_SLIDE
 
-        # 4. Team or gallery grid
-        if caption_pairs or (pic_count >= 3 and (pic_row or team_kw)):
-            return SlideArchetype.TEAM_OR_GALLERY_GRID
-
-        # 5. Process timeline
-        if timeline_kw or (h_seq and pic_count <= 1):
-            return SlideArchetype.PROCESS_TIMELINE
-
-        # 6. Agenda slide
         if agenda_kw:
             return SlideArchetype.AGENDA_SLIDE
 
-        # 7. Quote slide
+        if caption_pairs or (pic_count >= 3 and (pic_row or team_kw)):
+            return SlideArchetype.TEAM_OR_GALLERY_GRID
+
+        if timeline_kw or (h_seq and pic_count <= 1):
+            return SlideArchetype.PROCESS_TIMELINE
+
         if has_quote and not agenda_kw and not closing_kw:
             return SlideArchetype.QUOTE_SLIDE
 
-        # 8. Section splitter
         if is_splitter and slide_idx > 0:
             return SlideArchetype.SECTION_SPLITTER
 
-        # 9. Multi-card content (standard content slide)
+        # Real ONNX SlideGNN Neural Classification
+        session = _get_slide_gnn_session()
+        if session is not None:
+            try:
+                import numpy as np
+                X, A = cls.extract_slide_graph(slide)
+                inputs = {
+                    session.get_inputs()[0].name: X,
+                    session.get_inputs()[1].name: A,
+                }
+                outputs = session.run(None, inputs)
+                slide_logits = outputs[1]
+                pred_idx = int(np.argmax(slide_logits[0]))
+                gnn_arch = GNN_ARCHETYPE_MAP.get(pred_idx)
+                if gnn_arch and gnn_arch not in (SlideArchetype.COVER_SLIDE, SlideArchetype.DATA_TABLE_SLIDE, SlideArchetype.CLOSING_SLIDE):
+                    # Neuro-symbolic guardrails on GNN prediction:
+                    if gnn_arch == SlideArchetype.TEAM_OR_GALLERY_GRID and pic_count < 3 and not caption_pairs:
+                        gnn_arch = None
+                    elif gnn_arch == SlideArchetype.QUOTE_SLIDE and not has_quote:
+                        gnn_arch = None
+                    elif gnn_arch == SlideArchetype.SECTION_SPLITTER and (text_count > 3 or has_table_shape):
+                        gnn_arch = None
+
+                    if gnn_arch:
+                        return gnn_arch
+            except Exception:
+                pass
+
+        # Check for external golden_brain.json weights
+        weights_paths = [
+            os.path.join(os.path.dirname(__file__), "golden_brain.json"),
+            os.path.join(os.path.dirname(__file__), "..", "..", "brands", "golden_brain.json"),
+        ]
+        for wp in weights_paths:
+            if os.path.exists(wp):
+                try:
+                    with open(wp, "r", encoding="utf-8") as f:
+                        brain = json.load(f)
+                    if "archetypes" in brain and "weights" in brain:
+                        scores = {}
+                        for arch_name, w_vec in brain["weights"].items():
+                            bias = brain.get("biases", {}).get(arch_name, 0.0)
+                            scores[arch_name] = sum(f * w for f, w in zip(feats, w_vec)) + bias
+                        best_arch = max(scores, key=scores.get)
+                        for member in SlideArchetype:
+                            if member.name == best_arch or member.value == best_arch:
+                                return member
+                except Exception:
+                    pass
+
+        # Default standard content slide
         return SlideArchetype.MULTI_CARD_CONTENT
 
 
@@ -1054,13 +1207,19 @@ class ArchetypeEngine:
             self._snap_title_top_left(title_shape)
             k = min(4, len(pictures))
             pictures.sort(key=lambda p: p.left.inches if hasattr(p, "left") and p.left else 0.0)
-            slot_w = 2.68
-            gap = 0.33
+            team_configs = {
+                1: (11.73, 0.0),
+                2: (5.66, 0.40),
+                3: (3.68, 0.34),
+                4: (2.68, 0.33),
+            }
+            slot_w, gap = team_configs.get(k, (2.68, 0.33))
             start_x = 0.80
+            slot_h = 2.60 if content_text_shapes else 4.60
 
             for i, pic in enumerate(pictures[:k]):
                 x_pos = start_x + i * (slot_w + gap)
-                self._fit_picture_in_slot(pic, x_pos, 1.75, slot_w, 2.60)
+                self._fit_picture_in_slot(pic, x_pos, 1.75, slot_w, slot_h)
 
                 matching_texts = [
                     ts for ts in content_text_shapes

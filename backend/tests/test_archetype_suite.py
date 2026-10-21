@@ -188,14 +188,6 @@ def test_12_slide_presentation_archetypes_and_rules(tmp_path):
     generate_12_slide_presentation(src_deck)
     assert src_deck.exists()
 
-    # Also save to backend/samples/sample_12slide_archetypes.pptx for reference
-    samples_dir = Path("backend/samples")
-    if samples_dir.exists():
-        try:
-            generate_12_slide_presentation(samples_dir / "sample_12slide_archetypes.pptx")
-        except Exception:
-            pass
-
     # Execute MorphPipeline
     dna = BrandDNA.load("enterprise_navy")
     report = MorphPipeline(dna, options=MorphOptions()).run(src_deck, out_deck)

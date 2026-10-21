@@ -23,12 +23,18 @@ interface ASTNode {
   id: number;
   type: string;
   shape_name?: string;
+  name?: string;
+  geom_type?: string;
+  is_layout_bg?: boolean;
+  crop?: { l: number; t: number; r: number; b: number };
   x?: number;
   y?: number;
   w?: number;
   h?: number;
   fill_color?: string;
+  fill_hex?: string;
   line_color?: string;
+  line_hex?: string;
   is_title?: boolean;
   bbox: { left: number; top: number; width: number; height: number };
   image_src?: string;
@@ -848,9 +854,42 @@ export default function App() {
 
                 {/* AST Nodes Rendering Layer — Canvas renders ONLY nodes from slide AST (Zero duplicate overlays!) */}
                 <div className="relative z-10 w-full h-full">
+                  {/* Layer 0: Background Shapes from Slide Layout & Master (in Raw mode) */}
+                  {viewMode === 'before' &&
+                    activeSlide?.nodes
+                      .filter((n) => n.is_layout_bg)
+                      .map((node, nIdx) => {
+                        const leftPx = ((node.x ?? node.bbox.left) ?? 0) * SCALE_X;
+                        const topPx = ((node.y ?? node.bbox.top) ?? 0) * SCALE_Y;
+                        const widthPx = ((node.w ?? node.bbox.width) ?? 1) * SCALE_X;
+                        const heightPx = ((node.h ?? node.bbox.height) ?? 1) * SCALE_Y;
+                        const isEllipse = node.geom_type === 'ellipse' || node.geom_type === 'oval' || node.type === 'OVAL_SHAPE';
+                        const imgSrc = node.image_data_uri || node.image_src || node.image_data;
+
+                        return (
+                          <div
+                            key={`bg-shape-${nIdx}`}
+                            style={{
+                              left: `${leftPx}px`,
+                              top: `${topPx}px`,
+                              width: `${widthPx}px`,
+                              height: `${heightPx}px`,
+                              backgroundColor: node.fill_color || undefined,
+                              border: node.line_color ? `1px solid ${node.line_color}` : undefined,
+                              borderRadius: isEllipse ? '9999px' : undefined,
+                            }}
+                            className={`absolute pointer-events-none overflow-hidden ${isEllipse ? 'rounded-full' : ''}`}
+                          >
+                            {imgSrc && (
+                              <img src={imgSrc} alt="Background Asset" className="w-full h-full object-cover pointer-events-none" />
+                            )}
+                          </div>
+                        );
+                      })}
+
                   {/* Layer 1: PICTURE Nodes */}
                   {activeSlide?.nodes
-                    .filter((n) => n.type === 'PICTURE' || n.type === 'IMAGE')
+                    .filter((n) => (n.type === 'PICTURE' || n.type === 'IMAGE') && !n.is_layout_bg)
                     .map((node, nIdx) => {
                       const leftPx = ((node.x ?? node.bbox.left) ?? 0) * SCALE_X;
                       const topPx = ((node.y ?? node.bbox.top) ?? 0) * SCALE_Y;
@@ -858,6 +897,7 @@ export default function App() {
                       const heightPx = ((node.h ?? node.bbox.height) ?? 1) * SCALE_Y;
                       const isSelected = selectedNodeIndex === nIdx;
                       const imgSrc = node.image_data_uri || node.image_src || node.image_data;
+                      const isEllipse = node.geom_type === 'ellipse' || node.geom_type === 'oval' || node.type === 'OVAL_SHAPE';
 
                       return (
                         <div
@@ -871,16 +911,19 @@ export default function App() {
                             top: `${topPx}px`,
                             width: `${widthPx}px`,
                             height: `${heightPx}px`,
+                            borderRadius: isEllipse ? '9999px' : undefined,
                           }}
-                          className={`absolute rounded overflow-hidden cursor-pointer ${
-                            isSelected ? 'ring-2 ring-[#FFB81C]' : ''
-                          }`}
+                          className={`absolute cursor-pointer overflow-hidden ${
+                            isEllipse ? 'rounded-full' : 'rounded'
+                          } ${isSelected ? 'ring-2 ring-[#FFB81C]' : ''}`}
                         >
                           {imgSrc ? (
                             <img
                               src={imgSrc}
                               alt="Slide Visual Asset"
-                              className="w-full h-full object-contain select-none pointer-events-none"
+                              className={`w-full h-full select-none pointer-events-none ${
+                                isEllipse ? 'object-cover rounded-full' : 'object-contain'
+                              }`}
                             />
                           ) : (
                             <div className="w-full h-full bg-[#14305F]/40 flex items-center justify-center text-[10px] text-[#8EA0C2]">
@@ -895,6 +938,7 @@ export default function App() {
                   {activeSlide?.nodes
                     .filter(
                       (n) =>
+                        !n.is_layout_bg &&
                         (n.type === 'RECTANGLE_SHAPE' ||
                         n.type === 'CONTAINER_SHAPE' ||
                         n.type === 'OVAL_SHAPE' ||
@@ -912,6 +956,7 @@ export default function App() {
                       const widthPx = ((node.w ?? node.bbox.width) ?? 1) * SCALE_X;
                       const heightPx = ((node.h ?? node.bbox.height) ?? 1) * SCALE_Y;
                       const isSelected = selectedNodeIndex === nIdx;
+                      const isEllipse = node.geom_type === 'ellipse' || node.geom_type === 'oval' || node.type === 'OVAL_SHAPE';
 
                       return (
                         <div
@@ -927,10 +972,11 @@ export default function App() {
                             height: `${heightPx}px`,
                             backgroundColor: node.fill_color || undefined,
                             border: node.line_color ? `1px solid ${node.line_color}` : undefined,
+                            borderRadius: isEllipse ? '9999px' : undefined,
                           }}
-                          className={`absolute rounded transition cursor-pointer ${
-                            isSelected ? 'ring-2 ring-[#FFB81C]' : ''
-                          }`}
+                          className={`absolute transition cursor-pointer ${
+                            isEllipse ? 'rounded-full' : 'rounded'
+                          } ${isSelected ? 'ring-2 ring-[#FFB81C]' : ''}`}
                         />
                       );
                     })}
