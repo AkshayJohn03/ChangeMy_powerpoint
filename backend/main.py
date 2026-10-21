@@ -94,6 +94,24 @@ def _save_upload(upload: UploadFile, suffix: str) -> str:
         save_upload_bounded(upload, tmp.name)
         return tmp.name
 
+def _get_default_sample_deck() -> str:
+    """Return the absolute path to the canonical default sample presentation."""
+    samples_dir = os.path.join(os.path.dirname(__file__), "samples")
+    examples_dir = os.path.join(os.path.dirname(__file__), "examples")
+    test_path = os.environ.get(
+        "BRANDMORPH_TEST_DECK",
+        os.path.join(samples_dir, "sample_12slide_archetypes.pptx"),
+    )
+    if not os.path.exists(test_path):
+        test_path = os.path.join(samples_dir, "sample_legacy_pitch.pptx")
+    if not os.path.exists(test_path):
+        test_path = os.path.join(examples_dir, "demo_raw.pptx")
+    if not os.path.exists(test_path):
+        raise FileNotFoundError(
+            "Sample deck not found. Place sample_12slide_archetypes.pptx in backend/samples/ or demo_raw.pptx in backend/examples/."
+        )
+    return test_path
+
 @app.post("/api/parse_deck")
 async def parse_deck(file: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pptx") as tmp:
@@ -101,9 +119,16 @@ async def parse_deck(file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
-        decompiler = SlideDecompiler(tmp_path)
-        ast = decompiler.parse_deck()
-        return {"status": "success", "slides": ast, "slide_count": len(ast)}
+        orig_dec = SlideDecompiler(tmp_path, raw_mode=True)
+        orig_ast = orig_dec.parse_deck()
+        morphed_dec = SlideDecompiler(tmp_path, raw_mode=False)
+        morphed_ast = morphed_dec.parse_deck()
+        return {
+            "status": "success",
+            "slides": morphed_ast,
+            "original_slides": orig_ast,
+            "slide_count": len(morphed_ast),
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
@@ -118,18 +143,10 @@ async def health():
 @app.get("/api/parse_test_ppt")
 async def demo_ast():
     """Parse the bundled sample deck; returns original_slides, slides, and deck_base64."""
-    samples_dir = os.path.join(os.path.dirname(__file__), "samples")
-    examples_dir = os.path.join(os.path.dirname(__file__), "examples")
-    test_path = os.environ.get(
-        "BRANDMORPH_TEST_DECK",
-        os.path.join(samples_dir, "sample_12slide_archetypes.pptx"),
-    )
-    if not os.path.exists(test_path):
-        test_path = os.path.join(samples_dir, "sample_legacy_pitch.pptx")
-    if not os.path.exists(test_path):
-        test_path = os.path.join(examples_dir, "demo_raw.pptx")
-    if not os.path.exists(test_path):
-        return {"status": "error", "message": "Sample deck not found. Place sample_legacy_pitch.pptx in backend/samples/ or demo_raw.pptx in backend/examples/."}
+    try:
+        test_path = _get_default_sample_deck()
+    except FileNotFoundError as e:
+        return {"status": "error", "message": str(e)}
 
     out_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pptx")
     out_tmp.close()
@@ -245,19 +262,15 @@ async def api_deck_inventory(file: UploadFile = File(...)):
 @app.get("/api/sample_pptx")
 async def get_sample_pptx():
     """Download bundled unformatted sample presentation for one-click testing."""
-    samples_dir = os.path.join(os.path.dirname(__file__), "samples")
-    examples_dir = os.path.join(os.path.dirname(__file__), "examples")
-    sample_path = os.path.join(samples_dir, "sample_12slide_archetypes.pptx")
-    if not os.path.exists(sample_path):
-        sample_path = os.path.join(samples_dir, "sample_legacy_pitch.pptx")
-    if not os.path.exists(sample_path):
-        sample_path = os.path.join(examples_dir, "demo_raw.pptx")
-    if not os.path.exists(sample_path):
+    try:
+        sample_path = _get_default_sample_deck()
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Sample presentation not found")
+    filename = os.path.basename(sample_path)
     return FileResponse(
         sample_path,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        filename="sample_12slide_archetypes.pptx" if "sample_12slide" in sample_path else "sample_legacy_pitch.pptx",
+        filename=filename,
     )
 
 

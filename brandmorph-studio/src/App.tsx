@@ -243,6 +243,8 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('Ready to import .pptx');
   const [canvasScale, setCanvasScale] = useState<number>(1);
+  const [uploadedFile, setUploadedFile] = useState<File | Blob | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stageContainerRef = useRef<HTMLDivElement>(null);
@@ -289,14 +291,15 @@ export default function App() {
   }, []);
 
   // Upload and process presentation through Python engine
-  const processDeck = async (fileBlob: Blob, name: string) => {
+  const processDeck = async (fileBlob: Blob, name: string, brandToUse?: string) => {
     setIsProcessing(true);
     setFileName(name);
     setStatusMessage(`Governing ${name}...`);
 
+    const brand = brandToUse || selectedBrand;
     const formData = new FormData();
     formData.append('file', fileBlob, name);
-    formData.append('brand', selectedBrand);
+    formData.append('brand', brand);
 
     try {
       const res = await fetch('/api/morph', {
@@ -311,8 +314,8 @@ export default function App() {
 
       const data = await res.json();
       if (data.status === 'success') {
-        setSlides(data.slides || []);
         setOriginalSlides(data.original_slides || []);
+        setSlides(data.slides || []);
         setActiveSlideIndex(0);
         setSelectedNodeIndex(null);
         setReport(data.report || null);
@@ -333,17 +336,39 @@ export default function App() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // 1. Immediately clear both states first so no stale or sample slides linger
+      setSlides([]);
+      setOriginalSlides([]);
+      setDeckBase64(null);
+      setActiveSlideIndex(0);
+      setSelectedNodeIndex(null);
+      setReport(null);
+
+      // 2. Store uploaded file for brand changes
+      setUploadedFile(file);
+      setUploadedFileName(file.name);
+
       try {
         let fileToSend: Blob = file;
         if (file.size > 3.5 * 1024 * 1024) {
           setStatusMessage(`Optimizing media in ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)...`);
           fileToSend = await optimizePptxMedia(file);
         }
-        await processDeck(fileToSend, file.name);
+        await processDeck(fileToSend, file.name, selectedBrand);
       } catch (err: any) {
         console.error(err);
-        await processDeck(file, file.name);
+        await processDeck(file, file.name, selectedBrand);
       }
+    }
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
+  const handleBrandChange = async (newBrand: string) => {
+    setSelectedBrand(newBrand);
+    if (uploadedFile) {
+      await processDeck(uploadedFile, uploadedFileName || 'Presentation.pptx', newBrand);
     }
   };
 
@@ -351,13 +376,22 @@ export default function App() {
   const handleLoadSample = async () => {
     setIsProcessing(true);
     setStatusMessage('Fetching sample deck...');
+    setUploadedFile(null);
+    setUploadedFileName('');
+    setSlides([]);
+    setOriginalSlides([]);
+    setDeckBase64(null);
+    setActiveSlideIndex(0);
+    setSelectedNodeIndex(null);
+    setReport(null);
+
     try {
       const res = await fetch('/api/demo_ast');
       if (!res.ok) throw new Error('Sample presentation not found on server.');
       const data = await res.json();
       if (data.status === 'success') {
-        setSlides(data.slides || []);
         setOriginalSlides(data.original_slides || []);
+        setSlides(data.slides || []);
         setActiveSlideIndex(0);
         setSelectedNodeIndex(null);
         setDeckBase64(data.deck_base64 || null);
@@ -369,7 +403,7 @@ export default function App() {
         const pptxRes = await fetch('/api/sample_pptx');
         if (!pptxRes.ok) throw new Error(data.message || 'Failed to load sample');
         const blob = await pptxRes.blob();
-        await processDeck(blob, 'sample_legacy_pitch.pptx');
+        await processDeck(blob, 'sample_12slide_archetypes.pptx', selectedBrand);
       }
     } catch (err: any) {
       console.error(err);
@@ -637,7 +671,7 @@ export default function App() {
             <Palette className="w-3.5 h-3.5 text-[#001F33]" />
             <select
               value={selectedBrand}
-              onChange={(e) => setSelectedBrand(e.target.value)}
+              onChange={(e) => handleBrandChange(e.target.value)}
               className="bg-transparent text-xs text-[#18181B] font-medium focus:outline-none cursor-pointer"
             >
               {brands.map((b) => (
@@ -708,13 +742,31 @@ export default function App() {
                   </div>
 
                   {/* Mini Aspect Ratio Preview Card */}
-                  <div className="w-full aspect-16/9 rounded bg-[#030C1E] border border-[#E5E0D8] relative overflow-hidden flex flex-col justify-between p-1.5">
-                    <div className="text-[7px] text-[#FFB81C] font-serif truncate">
+                  <div
+                    style={{
+                      backgroundColor: viewMode === 'before' ? (s.background_color || '#FFFFFF') : '#030C1E',
+                    }}
+                    className="w-full aspect-16/9 rounded border border-[#E5E0D8] relative overflow-hidden flex flex-col justify-between p-1.5 shadow-2xs"
+                  >
+                    <div
+                      style={{
+                        color: viewMode === 'before' ? '#18181B' : '#FFB81C',
+                        fontFamily: viewMode === 'before' ? 'sans-serif' : 'serif',
+                      }}
+                      className="text-[7px] truncate font-medium"
+                    >
                       {s.nodes.find((n) => (n.y ?? n.bbox.top) < 1.8)?.paragraphs?.[0]?.text || `Slide ${s.slide_id}`}
                     </div>
-                    <div className="flex items-center justify-between text-[6px] text-[#93A5C4] font-mono">
+                    <div
+                      style={{
+                        color: viewMode === 'before' ? '#71717A' : '#93A5C4',
+                      }}
+                      className="flex items-center justify-between text-[6px] font-mono"
+                    >
                       <span>{s.nodes.length} elements</span>
-                      <span className="text-[#FFB81C]">W3C</span>
+                      <span style={{ color: viewMode === 'before' ? '#001F33' : '#FFB81C', fontWeight: 'bold' }}>
+                        {viewMode === 'before' ? 'RAW' : 'W3C'}
+                      </span>
                     </div>
                   </div>
                 </div>
